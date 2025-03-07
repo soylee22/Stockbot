@@ -273,17 +273,11 @@ def check_ema_alignment(emas):
 def calculate_bullish_score(daily_rsi, weekly_rsi, ema_aligned, pct_change):
     """
     Calculate a bullish score to sort results (higher is more bullish)
-    Simple and effective scoring method focused on RSI values
+    Pure RSI-based scoring to find the true top performers
     """
-    score = 0
-    
-    # RSI components (weighted more heavily)
-    score += daily_rsi * 2    # 0-200 points, highest priority
-    score += weekly_rsi * 1.5  # 0-150 points
-    
-    # EMA alignment bonus
-    if ema_aligned:
-        score += 25
+    # Very straightforward - just use the RSI values directly
+    # Daily RSI is weighted 2x as it's more current
+    score = daily_rsi * 2 + weekly_rsi
     
     return score
 
@@ -426,10 +420,10 @@ def create_chart(result):
     # Update layout
     fig.update_layout(
         xaxis_rangeslider_visible=False,
-        template="plotly_dark",
+        template="plotly_white",
         height=600,
-        paper_bgcolor='#0e1117',
-        plot_bgcolor='#0e1117',
+        paper_bgcolor='white',
+        plot_bgcolor='#f8f9fa',
         margin=dict(l=10, r=10, t=60, b=10),
         legend=dict(
             orientation="h",
@@ -437,6 +431,11 @@ def create_chart(result):
             y=1.02,
             xanchor="right",
             x=1
+        ),
+        font=dict(
+            family="Arial, sans-serif",
+            size=12,
+            color="#212529"
         )
     )
     
@@ -446,11 +445,11 @@ def create_chart(result):
     
     # Style updates
     fig.update_xaxes(
-        gridcolor="#1f2630",
+        gridcolor="#e0e0e0",
         showgrid=True
     )
     fig.update_yaxes(
-        gridcolor="#1f2630",
+        gridcolor="#e0e0e0",
         showgrid=True
     )
     
@@ -745,40 +744,100 @@ def main():
         # Show charts for top performers if requested
         if show_charts and valid_results:
             with charts_placeholder.container():
-                st.markdown('<div class="card">', unsafe_allow_html=True)
-                st.subheader("📈 Top Performers")
+                # Create tabs for bulls and bears
+                bull_bear_tabs = st.tabs(["Top Bulls", "Top Bears"])
                 
-                # Show top 3 (or fewer if not enough)
-                top_n = min(3, len(valid_results))
+                # Top Bulls Tab
+                with bull_bear_tabs[0]:
+                    st.markdown('<div class="card" style="background-color: #f8f9fa;">', unsafe_allow_html=True)
+                    st.subheader("📈 Top Bulls")
+                    
+                    # Filter and sort by highest RSI for bulls
+                    bullish_results = [r for r in valid_results 
+                                      if r["daily_status"] == "Bullish" and r["weekly_status"] == "Bullish"]
+                    bullish_results.sort(key=lambda x: x.get("score", -1000), reverse=True)
+                    
+                    # Show top 3 (or fewer if not enough)
+                    top_n = min(3, len(bullish_results))
+                    
+                    if top_n > 0:
+                        # Create columns for charts
+                        cols = st.columns(top_n)
+                        
+                        # Display each chart in its own column
+                        for i in range(top_n):
+                            with cols[i]:
+                                chart = create_chart(bullish_results[i])
+                                if chart:
+                                    st.plotly_chart(chart, use_container_width=True)
+                                    
+                                    # Add key metrics below chart
+                                    metric_cols = st.columns(3)
+                                    metric_cols[0].metric(
+                                        "Daily RSI", 
+                                        f"{bullish_results[i]['daily_rsi']:.0f}",
+                                        delta=f"{bullish_results[i]['daily_rsi'] - 50:.0f} from 50"
+                                    )
+                                    metric_cols[1].metric(
+                                        "Weekly RSI", 
+                                        f"{bullish_results[i]['weekly_rsi']:.0f}",
+                                        delta=f"{bullish_results[i]['weekly_rsi'] - 50:.0f} from 50"
+                                    )
+                                    metric_cols[2].metric(
+                                        "Today", 
+                                        f"{bullish_results[i]['price']:.4f}",
+                                        delta=f"{bullish_results[i]['pct_change']:.2f}%"
+                                    )
+                    else:
+                        st.info("No strong bullish instruments found.")
+                    
+                    st.markdown('</div>', unsafe_allow_html=True)
                 
-                # Create columns for charts
-                cols = st.columns(top_n)
-                
-                # Display each chart in its own column
-                for i in range(top_n):
-                    with cols[i]:
-                        chart = create_chart(valid_results[i])
-                        if chart:
-                            st.plotly_chart(chart, use_container_width=True)
-                            
-                            # Add key metrics below chart
-                            metric_cols = st.columns(3)
-                            metric_cols[0].metric(
-                                "Daily RSI", 
-                                f"{valid_results[i]['daily_rsi']:.0f}",
-                                delta=f"{valid_results[i]['daily_rsi'] - 50:.0f} from 50"
-                            )
-                            metric_cols[1].metric(
-                                "Weekly RSI", 
-                                f"{valid_results[i]['weekly_rsi']:.0f}",
-                                delta=f"{valid_results[i]['weekly_rsi'] - 50:.0f} from 50"
-                            )
-                            metric_cols[2].metric(
-                                "Today", 
-                                f"{valid_results[i]['price']:.4f}",
-                                delta=f"{valid_results[i]['pct_change']:.2f}%"
-                            )
-                st.markdown('</div>', unsafe_allow_html=True)
+                # Top Bears Tab
+                with bull_bear_tabs[1]:
+                    st.markdown('<div class="card" style="background-color: #f8f9fa;">', unsafe_allow_html=True)
+                    st.subheader("📉 Top Bears")
+                    
+                    # Filter and sort by lowest RSI for bears
+                    bearish_results = [r for r in valid_results 
+                                      if r["daily_status"] == "Bearish" and r["weekly_status"] == "Bearish"]
+                    bearish_results.sort(key=lambda x: x.get("score", 1000))
+                    
+                    # Show top 3 (or fewer if not enough)
+                    top_n = min(3, len(bearish_results))
+                    
+                    if top_n > 0:
+                        # Create columns for charts
+                        cols = st.columns(top_n)
+                        
+                        # Display each chart in its own column
+                        for i in range(top_n):
+                            with cols[i]:
+                                chart = create_chart(bearish_results[i])
+                                if chart:
+                                    st.plotly_chart(chart, use_container_width=True)
+                                    
+                                    # Add key metrics below chart
+                                    metric_cols = st.columns(3)
+                                    metric_cols[0].metric(
+                                        "Daily RSI", 
+                                        f"{bearish_results[i]['daily_rsi']:.0f}",
+                                        delta=f"{bearish_results[i]['daily_rsi'] - 50:.0f} from 50",
+                                        delta_color="inverse"
+                                    )
+                                    metric_cols[1].metric(
+                                        "Weekly RSI", 
+                                        f"{bearish_results[i]['weekly_rsi']:.0f}",
+                                        delta=f"{bearish_results[i]['weekly_rsi'] - 50:.0f} from 50",
+                                        delta_color="inverse"
+                                    )
+                                    metric_cols[2].metric(
+                                        "Today", 
+                                        f"{bearish_results[i]['price']:.4f}",
+                                        delta=f"{bearish_results[i]['pct_change']:.2f}%"
+                                    )
+                    else:
+                        st.info("No strong bearish instruments found.")
         
         # Show errors if any
         errors = [r for r in all_results if r.get("error")]
