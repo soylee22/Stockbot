@@ -177,12 +177,20 @@ COMMODITIES = {
     "CL=F": "WTI Crude Oil"
 }
 
-# US Treasuries
+# US Treasury ETFs and bond funds
 TREASURIES = {
-    "^IRX": "US 3M Treasury",
-    "^FVX": "US 5Y Treasury",
-    "^TNX": "US 10Y Treasury",
-    "^TYX": "US 30Y Treasury"
+    "SHY": "iShares 1-3 Year Treasury Bond ETF",
+    "IEI": "iShares 3-7 Year Treasury Bond ETF",
+    "IEF": "iShares 7-10 Year Treasury Bond ETF",
+    "TLH": "iShares 10-20 Year Treasury Bond ETF",
+    "TLT": "iShares 20+ Year Treasury Bond ETF",
+    "GOVT": "iShares U.S. Treasury Bond ETF",
+    "VGSH": "Vanguard Short-Term Treasury ETF",
+    "VGIT": "Vanguard Intermediate-Term Treasury ETF",
+    "VGLT": "Vanguard Long-Term Treasury ETF",
+    "BND": "Vanguard Total Bond Market ETF",
+    "AGG": "iShares Core U.S. Aggregate Bond ETF",
+    "MBB": "iShares MBS ETF"
 }
 
 # Popular FTSE 100 stocks
