@@ -497,9 +497,9 @@ def display_rsi_guide():
         <h4 style="margin-top:0; color: #212529;">RSI Color Guide</h4>
         <ul style="list-style-type: none; padding-left: 10px; color: #212529;">
             <li><span style="color: #00B050; font-weight: bold;">Strong Green (>70)</span>: Strong bullish momentum</li>
-            <li><span style="color: #FF0000; font-weight: bold;">Strong Red (<30)</span>: Strong bearish momentum</li>
             <li><span style="color: #92D050;">Light Green (>50)</span>: Bullish momentum</li>
             <li><span style="color: #FF6666;">Light Red (<50)</span>: Bearish momentum</li>
+            <li><span style="color: #FF0000; font-weight: bold;">Strong Red (<30)</span>: Strong bearish momentum</li>
         </ul>
         <p style="margin-bottom:0; color: #212529;">The <b>Change %</b> column shows the daily price change percentage. Green indicates positive change, red indicates negative.</p>
     </div>
@@ -690,7 +690,7 @@ def main():
                                 "Weekly": r["weekly_status"],
                                 "EMA": r["ema_status"],
                                 "Price": f"{r['price']:.4f}",
-                                "Change %": f"{r['pct_change']:.1f}",
+                                "Change %": f"{r['pct_change']:.2f}",
                                 "Daily RSI": f"{r['daily_rsi']:.0f}",
                                 "Weekly RSI": f"{r['weekly_rsi']:.0f}"
                             })
@@ -721,7 +721,7 @@ def main():
                                     "Weekly": r["weekly_status"],
                                     "EMA": r["ema_status"],
                                     "Price": f"{r['price']:.4f}",
-                                    "Change %": f"{r['pct_change']:.1f}",
+                                    "Change %": f"{r['pct_change']:.2f}",
                                     "Daily RSI": f"{r['daily_rsi']:.0f}",
                                     "Weekly RSI": f"{r['weekly_rsi']:.0f}"
                                 })
@@ -775,7 +775,7 @@ def main():
                             metric_cols[2].metric(
                                 "Today", 
                                 f"{valid_results[i]['price']:.4f}",
-                                delta=f"{valid_results[i]['pct_change']:.1f}%"
+                                delta=f"{valid_results[i]['pct_change']:.2f}%"
                             )
                 st.markdown('</div>', unsafe_allow_html=True)
         
