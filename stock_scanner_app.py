@@ -10,7 +10,7 @@ from plotly.subplots import make_subplots
 # Set page config
 st.set_page_config(
     page_title="Market Signal Scanner",
-    page_icon="📊",
+    page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -273,24 +273,17 @@ def check_ema_alignment(emas):
 def calculate_bullish_score(daily_rsi, weekly_rsi, ema_aligned, pct_change):
     """
     Calculate a bullish score to sort results (higher is more bullish)
-    Takes into account RSI values, EMA alignment and recent price momentum
+    Simple and effective scoring method focused on RSI values
     """
     score = 0
     
-    # RSI components (weighted)
-    score += daily_rsi * 1.5  # 0-150 points, with higher weight on daily
-    score += weekly_rsi        # 0-100 points
+    # RSI components (weighted more heavily)
+    score += daily_rsi * 2    # 0-200 points, highest priority
+    score += weekly_rsi * 1.5  # 0-150 points
     
-    # EMA alignment bonus (50 points)
+    # EMA alignment bonus
     if ema_aligned:
-        score += 50
-    
-    # Recent momentum (price change)
-    score += pct_change * 10  # Price momentum factor
-    
-    # Penalize overbought conditions slightly
-    if daily_rsi > 80:
-        score -= (daily_rsi - 80) * 2
+        score += 25
     
     return score
 
@@ -503,10 +496,10 @@ def display_rsi_guide():
     <div class="guide-container">
         <h4 style="margin-top:0; color: #212529;">RSI Color Guide</h4>
         <ul style="list-style-type: none; padding-left: 10px; color: #212529;">
-            <li><span style="color: #F44336; font-weight: bold;">Red (>70)</span>: Overbought - potential reversal</li>
-            <li><span style="color: #4CAF50; font-weight: bold;">Green (<30)</span>: Oversold - potential reversal</li>
-            <li><span style="color: #AED581;">Light Green (>50)</span>: Bullish momentum</li>
-            <li><span style="color: #EF9A9A;">Light Red (<50)</span>: Bearish momentum</li>
+            <li><span style="color: #00B050; font-weight: bold;">Strong Green (>70)</span>: Strong bullish momentum</li>
+            <li><span style="color: #FF0000; font-weight: bold;">Strong Red (<30)</span>: Strong bearish momentum</li>
+            <li><span style="color: #92D050;">Light Green (>50)</span>: Bullish momentum</li>
+            <li><span style="color: #FF6666;">Light Red (<50)</span>: Bearish momentum</li>
         </ul>
         <p style="margin-bottom:0; color: #212529;">The <b>Change %</b> column shows the daily price change percentage. Green indicates positive change, red indicates negative.</p>
     </div>
@@ -546,13 +539,13 @@ def format_dataframe(df):
         try:
             val_num = float(val)
             if val_num > 70:
-                return 'color: #F44336; font-weight: bold'  # Overbought
+                return 'color: #00B050; font-weight: bold'  # Strong bullish (deep green)
             elif val_num < 30:
-                return 'color: #4CAF50; font-weight: bold'  # Oversold
+                return 'color: #FF0000; font-weight: bold'  # Strong bearish (deep red)
             elif val_num > 50:
-                return 'color: #AED581'  # Bullish
+                return 'color: #92D050'  # Moderate bullish (light green)
             else:
-                return 'color: #EF9A9A'  # Bearish
+                return 'color: #FF6666'  # Moderate bearish (light red)
         except (ValueError, TypeError):
             return ''
     
@@ -698,9 +691,9 @@ def main():
                                 "Weekly": r["weekly_status"],
                                 "EMA": r["ema_status"],
                                 "Price": f"{r['price']:.4f}",
-                                "Change %": f"{r['pct_change']:.2f}",
-                                "Daily RSI": f"{r['daily_rsi']:.1f}",
-                                "Weekly RSI": f"{r['weekly_rsi']:.1f}"
+                                "Change %": f"{r['pct_change']:.1f}",
+                                "Daily RSI": f"{r['daily_rsi']:.0f}",
+                                "Weekly RSI": f"{r['weekly_rsi']:.0f}"
                             })
                     
                     if display_data:
@@ -729,9 +722,9 @@ def main():
                                     "Weekly": r["weekly_status"],
                                     "EMA": r["ema_status"],
                                     "Price": f"{r['price']:.4f}",
-                                    "Change %": f"{r['pct_change']:.2f}",
-                                    "Daily RSI": f"{r['daily_rsi']:.1f}",
-                                    "Weekly RSI": f"{r['weekly_rsi']:.1f}"
+                                    "Change %": f"{r['pct_change']:.1f}",
+                                    "Daily RSI": f"{r['daily_rsi']:.0f}",
+                                    "Weekly RSI": f"{r['weekly_rsi']:.0f}"
                                 })
                         
                         if cat_display_data:
@@ -772,18 +765,18 @@ def main():
                             metric_cols = st.columns(3)
                             metric_cols[0].metric(
                                 "Daily RSI", 
-                                f"{valid_results[i]['daily_rsi']:.1f}",
-                                delta=f"{valid_results[i]['daily_rsi'] - 50:.1f} from 50"
+                                f"{valid_results[i]['daily_rsi']:.0f}",
+                                delta=f"{valid_results[i]['daily_rsi'] - 50:.0f} from 50"
                             )
                             metric_cols[1].metric(
                                 "Weekly RSI", 
-                                f"{valid_results[i]['weekly_rsi']:.1f}",
-                                delta=f"{valid_results[i]['weekly_rsi'] - 50:.1f} from 50"
+                                f"{valid_results[i]['weekly_rsi']:.0f}",
+                                delta=f"{valid_results[i]['weekly_rsi'] - 50:.0f} from 50"
                             )
                             metric_cols[2].metric(
                                 "Today", 
                                 f"{valid_results[i]['price']:.4f}",
-                                delta=f"{valid_results[i]['pct_change']:.2f}%"
+                                delta=f"{valid_results[i]['pct_change']:.1f}%"
                             )
                 st.markdown('</div>', unsafe_allow_html=True)
         
