@@ -9,8 +9,8 @@ from plotly.subplots import make_subplots
 
 # Set page config
 st.set_page_config(
-    page_title="TradePulse Market Scanner",
-    page_icon="📈",
+    page_title="Slater Stockbot",
+    page_icon="favicon-32x32.png",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -1017,11 +1017,8 @@ def main():
     with st.sidebar:
         st.markdown("""
         <div style="text-align: center; padding: 1rem 0;">
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M3 3V21H21" stroke="#2E5BFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M7 15L11 11L15 15L21 9" stroke="#2E5BFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-            <h1 style="font-size: 1.5rem; margin-top: 0.5rem;">TradePulse</h1>
+            <img src="837934968543099023.png" style="max-width: 80%; height: auto; margin-bottom: 1rem;">
+            <h1 style="font-size: 1.5rem; margin-top: 0.5rem;">Slater Stockbot</h1>
         </div>
         """, unsafe_allow_html=True)
         
@@ -1150,7 +1147,7 @@ def main():
         # Version info
         st.markdown("""
         <div style="text-align: center; font-size: 0.75rem; color: #9CA3AF; margin-top: 1rem;">
-            TradePulse v1.0.0
+            Slater Stockbot v1.0.0
         </div>
         """, unsafe_allow_html=True)
     
@@ -1164,7 +1161,7 @@ def main():
                 <line x1="8" y1="21" x2="16" y2="21"></line>
                 <line x1="12" y1="17" x2="12" y2="21"></line>
             </svg>
-            Market Signal Dashboard
+            Slater Stockbot Dashboard
         </h1>
         <div class="last-updated">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 5px;">
