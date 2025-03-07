@@ -1,16 +1,4 @@
-# Add an RSI color legend next to the main legend
-    st.markdown("""
-    <div style="background-color: #f8f9fa; padding: 15px; border-radius: 10px; margin-top: 15px; color: #212529;">
-        <h4 style="margin-top:0; color: #212529;">RSI Color Guide</h4>
-        <ul style="list-style-type: none; padding-left: 10px;">
-            <li><span style="color: #F44336; font-weight: bold;">Red (>70)</span>: Overbought - potential reversal</li>
-            <li><span style="color: #4CAF50; font-weight: bold;">Green (<30)</span>: Oversold - potential reversal</li>
-            <li><span style="color: #AED581;">Light Green (>50)</span>: Bullish momentum</li>
-            <li><span style="color: #EF9A9A;">Light Red (<50)</span>: Bearish momentum</li>
-        </ul>
-        <p style="margin-bottom:0;">The <b>Change %</b> column shows the daily price change percentage. Green indicates positive change, red indicates negative.</p>
-    </div>
-    """, unsafe_allow_html=True)import streamlit as st
+import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
@@ -44,7 +32,7 @@ st.markdown("""
     
     /* Signal legend */
     .legend-container {
-        background-color: rgba(30, 33, 43, 0.8);
+        background-color: #f8f9fa;
         border-radius: 10px;
         padding: 15px;
         margin-bottom: 20px;
@@ -118,6 +106,15 @@ st.markdown("""
         border-radius: 10px;
         padding: 15px;
         margin-bottom: 15px;
+    }
+    
+    /* Guide */
+    .guide-container {
+        background-color: #f8f9fa;
+        color: #212529;
+        border-radius: 10px;
+        padding: 15px;
+        margin-top: 15px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -337,9 +334,6 @@ def scan_ticker(ticker, display_name):
             emoji = "⚠️⚠️"
         else:
             emoji = "💀💀"
-            
-        # Calculate bullish score for sorting
-        bullish_score = calculate_bullish_score(latest_daily_rsi, latest_weekly_rsi, ema_aligned, pct_change)
         
         # Current price
         current_price = daily_data['Close'].iloc[-1]
@@ -350,6 +344,9 @@ def scan_ticker(ticker, display_name):
             pct_change = ((current_price - prev_close) / prev_close) * 100
         else:
             pct_change = 0
+            
+        # Calculate bullish score for sorting
+        bullish_score = calculate_bullish_score(latest_daily_rsi, latest_weekly_rsi, ema_aligned, pct_change)
         
         # Return result as dictionary for easier sorting
         return {
@@ -500,6 +497,21 @@ def display_signal_legend():
     </div>
     """, unsafe_allow_html=True)
 
+def display_rsi_guide():
+    """Display the RSI color guide"""
+    st.markdown("""
+    <div class="guide-container">
+        <h4 style="margin-top:0; color: #212529;">RSI Color Guide</h4>
+        <ul style="list-style-type: none; padding-left: 10px; color: #212529;">
+            <li><span style="color: #F44336; font-weight: bold;">Red (>70)</span>: Overbought - potential reversal</li>
+            <li><span style="color: #4CAF50; font-weight: bold;">Green (<30)</span>: Oversold - potential reversal</li>
+            <li><span style="color: #AED581;">Light Green (>50)</span>: Bullish momentum</li>
+            <li><span style="color: #EF9A9A;">Light Red (<50)</span>: Bearish momentum</li>
+        </ul>
+        <p style="margin-bottom:0; color: #212529;">The <b>Change %</b> column shows the daily price change percentage. Green indicates positive change, red indicates negative.</p>
+    </div>
+    """, unsafe_allow_html=True)
+
 def format_dataframe(df):
     """
     Apply conditional formatting to the dataframe
@@ -598,22 +610,12 @@ def main():
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     st.markdown(f"<div style='font-size:1.2em; margin-bottom:20px;'>⏱️ Last Updated: <b>{current_time}</b></div>", unsafe_allow_html=True)
     
-    # Display legend
-    display_signal_legend()
-    
-    # Add an RSI color legend next to the main legend
-    st.markdown("""
-    <div style="background-color: #f8f9fa; padding: 15px; border-radius: 10px; margin-top: 15px; color: #212529;">
-        <h4 style="margin-top:0; color: #212529;">RSI Color Guide</h4>
-        <ul style="list-style-type: none; padding-left: 10px;">
-            <li><span style="color: #F44336; font-weight: bold;">Red (>70)</span>: Overbought - potential reversal</li>
-            <li><span style="color: #4CAF50; font-weight: bold;">Green (<30)</span>: Oversold - potential reversal</li>
-            <li><span style="color: #AED581;">Light Green (>50)</span>: Bullish momentum</li>
-            <li><span style="color: #EF9A9A;">Light Red (<50)</span>: Bearish momentum</li>
-        </ul>
-        <p style="margin-bottom:0;">The <b>Change %</b> column shows the daily price change percentage. Green indicates positive change, red indicates negative.</p>
-    </div>
-    """, unsafe_allow_html=True)
+    # Display legends
+    col1, col2 = st.columns(2)
+    with col1:
+        display_signal_legend()
+    with col2:
+        display_rsi_guide()
     
     # Create placeholder for results
     results_placeholder = st.empty()
@@ -643,7 +645,7 @@ def main():
                     # Scan each ticker in the category
                     for ticker, name in category_tickers.items():
                         result = scan_ticker(ticker, name)
-                        result["category"] = category
+                        result["category"] = category  # Add category info
                         all_results.append(result)
                         category_results[category].append(result)
                         
