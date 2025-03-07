@@ -116,7 +116,7 @@ SYMBOL_EXPLANATION = {
     "🕣🕣": "Daily Bearish, Weekly Bullish (Clock)",
     "⚠️⚠️": "Daily Bullish, Weekly Bearish (Caution)",
     "💀💀": "Both Daily and Weekly Bearish",
-    "✔️": "EMAs aligned (7 EMA > 11 EMA > 21 EMA) on Daily Timeframe",
+    "✅": "EMAs aligned (7 EMA > 11 EMA > 21 EMA) on Daily Timeframe",
     "❌": "EMAs NOT aligned on Daily Timeframe"
 }
 
@@ -306,7 +306,7 @@ def scan_ticker(ticker, display_name):
         # Prepare status strings
         daily_status = "Bullish" if daily_bullish else "Bearish"
         weekly_status = "Bullish" if weekly_bullish else "Bearish"
-        ema_status = "✔️" if ema_aligned else "❌"
+        ema_status = "✅" if ema_aligned else "❌"
         
         # Determine emoji
         if daily_bullish and weekly_bullish:
@@ -451,25 +451,32 @@ def display_signal_legend():
     st.markdown("""
     <div class="legend-container">
         <h3 style="margin-top:0;">📊 Signal Legend</h3>
-        <div style="display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: center;">
-            <div style="font-size:24px;">🚀🚀</div>
-            <div>Both Daily and Weekly Bullish</div>
-            
-            <div style="font-size:24px;">🕣🕣</div>
-            <div>Daily Bearish, Weekly Bullish (Clock)</div>
-            
-            <div style="font-size:24px;">⚠️⚠️</div>
-            <div>Daily Bullish, Weekly Bearish (Caution)</div>
-            
-            <div style="font-size:24px;">💀💀</div>
-            <div>Both Daily and Weekly Bearish</div>
-            
-            <div style="font-size:24px;">✔️</div>
-            <div>EMAs aligned (7 EMA > 11 EMA > 21 EMA) on Daily Timeframe</div>
-            
-            <div style="font-size:24px;">❌</div>
-            <div>EMAs NOT aligned on Daily Timeframe</div>
-        </div>
+        <table style="width:100%">
+            <tr>
+                <td style="padding:10px;width:60px;text-align:center;"><span style="font-size:24px;">🚀🚀</span></td>
+                <td>Both Daily and Weekly Bullish</td>
+            </tr>
+            <tr>
+                <td style="padding:10px;width:60px;text-align:center;"><span style="font-size:24px;">🕣🕣</span></td>
+                <td>Daily Bearish, Weekly Bullish (Clock)</td>
+            </tr>
+            <tr>
+                <td style="padding:10px;width:60px;text-align:center;"><span style="font-size:24px;">⚠️⚠️</span></td>
+                <td>Daily Bullish, Weekly Bearish (Caution)</td>
+            </tr>
+            <tr>
+                <td style="padding:10px;width:60px;text-align:center;"><span style="font-size:24px;">💀💀</span></td>
+                <td>Both Daily and Weekly Bearish</td>
+            </tr>
+            <tr>
+                <td style="padding:10px;width:60px;text-align:center;"><span style="font-size:24px;">✅</span></td>
+                <td>EMAs aligned (7 EMA > 11 EMA > 21 EMA) on Daily Timeframe</td>
+            </tr>
+            <tr>
+                <td style="padding:10px;width:60px;text-align:center;"><span style="font-size:24px;">❌</span></td>
+                <td>EMAs NOT aligned on Daily Timeframe</td>
+            </tr>
+        </table>
     </div>
     """, unsafe_allow_html=True)
 
