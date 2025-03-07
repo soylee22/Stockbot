@@ -185,12 +185,73 @@ TREASURIES = {
     "^TYX": "US 30Y Treasury"
 }
 
+# Popular FTSE 100 stocks
+FTSE_STOCKS = {
+    "AAL.L": "Anglo American",
+    "ABF.L": "Associated British Foods",
+    "AZN.L": "AstraZeneca",
+    "BA.L": "BAE Systems",
+    "BARC.L": "Barclays",
+    "BATS.L": "British American Tobacco",
+    "BP.L": "BP",
+    "BRBY.L": "Burberry Group",
+    "BT.A.L": "BT Group",
+    "CPG.L": "Compass Group",
+    "DGE.L": "Diageo",
+    "GLEN.L": "Glencore",
+    "GSK.L": "GSK",
+    "HSBA.L": "HSBC Holdings",
+    "LGEN.L": "Legal & General Group",
+    "LLOY.L": "Lloyds Banking Group",
+    "NG.L": "National Grid",
+    "PRU.L": "Prudential",
+    "REL.L": "RELX Group",
+    "RIO.L": "Rio Tinto",
+    "RR.L": "Rolls-Royce Holdings",
+    "SHEL.L": "Shell",
+    "STAN.L": "Standard Chartered",
+    "TSCO.L": "Tesco",
+    "ULVR.L": "Unilever",
+    "VOD.L": "Vodafone Group"
+}
+
+# Popular US stocks
+US_STOCKS = {
+    "AAPL": "Apple",
+    "MSFT": "Microsoft",
+    "GOOGL": "Alphabet (Google)",
+    "AMZN": "Amazon",
+    "META": "Meta Platforms",
+    "TSLA": "Tesla",
+    "NVDA": "NVIDIA",
+    "JPM": "JPMorgan Chase",
+    "BAC": "Bank of America",
+    "WMT": "Walmart",
+    "PG": "Procter & Gamble",
+    "JNJ": "Johnson & Johnson",
+    "UNH": "UnitedHealth Group",
+    "HD": "Home Depot",
+    "MA": "Mastercard",
+    "V": "Visa",
+    "DIS": "Walt Disney",
+    "NFLX": "Netflix",
+    "INTC": "Intel",
+    "AMD": "Advanced Micro Devices",
+    "PYPL": "PayPal",
+    "NKE": "Nike",
+    "COST": "Costco",
+    "SBUX": "Starbucks",
+    "TXN": "Texas Instruments"
+}
+
 # All categories in a dictionary
 TICKER_CATEGORIES = {
     "INDICES": INDICES,
     "FOREX": FOREX,
     "COMMODITIES": COMMODITIES,
-    "TREASURIES": TREASURIES
+    "TREASURIES": TREASURIES,
+    "FTSE STOCKS": FTSE_STOCKS,
+    "US STOCKS": US_STOCKS
 }
 
 @st.cache_data(ttl=600)
