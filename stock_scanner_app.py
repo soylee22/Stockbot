@@ -477,30 +477,47 @@ def format_dataframe(df):
     """
     Apply conditional formatting to the dataframe
     """
+    # Make a copy to ensure we don't modify the original
+    df = df.copy()
+    
+    # Convert Change % to numeric (removing % sign if present)
+    if 'Change %' in df.columns:
+        df['Change %'] = pd.to_numeric(df['Change %'].str.replace('%', ''), errors='coerce')
+    
+    # Convert RSI columns to numeric
+    if 'Daily RSI' in df.columns:
+        df['Daily RSI'] = pd.to_numeric(df['Daily RSI'], errors='coerce')
+    if 'Weekly RSI' in df.columns:
+        df['Weekly RSI'] = pd.to_numeric(df['Weekly RSI'], errors='coerce')
+    
     # Format the Daily and Weekly status columns
-    df_styled = df.style.applymap(
+    df_styled = df.style.map(
         lambda x: 'color: #4CAF50; font-weight: bold' if x == 'Bullish' else 'color: #F44336; font-weight: bold',
         subset=['Daily', 'Weekly']
     )
     
     # Format the price change column
-    df_styled = df_styled.applymap(
+    df_styled = df_styled.map(
         lambda x: f'color: {"#4CAF50" if x > 0 else "#F44336"}; font-weight: bold',
         subset=['Change %']
     )
     
     # Format the RSI columns
     def highlight_rsi(val):
-        if val > 70:
-            return 'color: #F44336; font-weight: bold'  # Overbought
-        elif val < 30:
-            return 'color: #4CAF50; font-weight: bold'  # Oversold
-        elif val > 50:
-            return 'color: #AED581'  # Bullish
-        else:
-            return 'color: #EF9A9A'  # Bearish
+        try:
+            val_num = float(val)
+            if val_num > 70:
+                return 'color: #F44336; font-weight: bold'  # Overbought
+            elif val_num < 30:
+                return 'color: #4CAF50; font-weight: bold'  # Oversold
+            elif val_num > 50:
+                return 'color: #AED581'  # Bullish
+            else:
+                return 'color: #EF9A9A'  # Bearish
+        except (ValueError, TypeError):
+            return ''
     
-    df_styled = df_styled.applymap(highlight_rsi, subset=['Daily RSI', 'Weekly RSI'])
+    df_styled = df_styled.map(highlight_rsi, subset=['Daily RSI', 'Weekly RSI'])
     
     return df_styled
 
@@ -756,7 +773,7 @@ def main():
     # Check if it's time to refresh
     if datetime.now() >= st.session_state.last_refresh + timedelta(minutes=refresh_interval):
         st.session_state.last_refresh = datetime.now()
-        st.experimental_rerun()
+        st.rerun()
 
 if __name__ == "__main__":
     main()
