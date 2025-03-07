@@ -556,7 +556,6 @@ def format_dataframe(df):
 def main():
     # Sidebar configuration
     with st.sidebar:
-        st.image("https://i.imgur.com/8NtMsXM.png", width=80)  # A placeholder logo
         st.title("Market Scanner")
         st.markdown("---")
         
