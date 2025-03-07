@@ -1,4 +1,16 @@
-import streamlit as st
+# Add an RSI color legend next to the main legend
+    st.markdown("""
+    <div style="background-color: #f8f9fa; padding: 15px; border-radius: 10px; margin-top: 15px; color: #212529;">
+        <h4 style="margin-top:0; color: #212529;">RSI Color Guide</h4>
+        <ul style="list-style-type: none; padding-left: 10px;">
+            <li><span style="color: #F44336; font-weight: bold;">Red (>70)</span>: Overbought - potential reversal</li>
+            <li><span style="color: #4CAF50; font-weight: bold;">Green (<30)</span>: Oversold - potential reversal</li>
+            <li><span style="color: #AED581;">Light Green (>50)</span>: Bullish momentum</li>
+            <li><span style="color: #EF9A9A;">Light Red (<50)</span>: Bearish momentum</li>
+        </ul>
+        <p style="margin-bottom:0;">The <b>Change %</b> column shows the daily price change percentage. Green indicates positive change, red indicates negative.</p>
+    </div>
+    """, unsafe_allow_html=True)import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
@@ -261,19 +273,27 @@ def check_ema_alignment(emas):
     
     return emas['EMA_7'].iloc[-1] > emas['EMA_11'].iloc[-1] > emas['EMA_21'].iloc[-1]
 
-def calculate_bullish_score(daily_rsi, weekly_rsi, ema_aligned):
+def calculate_bullish_score(daily_rsi, weekly_rsi, ema_aligned, pct_change):
     """
     Calculate a bullish score to sort results (higher is more bullish)
+    Takes into account RSI values, EMA alignment and recent price momentum
     """
     score = 0
     
-    # RSI components (0-200 points)
-    score += daily_rsi  # 0-100 points
-    score += weekly_rsi  # 0-100 points
+    # RSI components (weighted)
+    score += daily_rsi * 1.5  # 0-150 points, with higher weight on daily
+    score += weekly_rsi        # 0-100 points
     
     # EMA alignment bonus (50 points)
     if ema_aligned:
         score += 50
+    
+    # Recent momentum (price change)
+    score += pct_change * 10  # Price momentum factor
+    
+    # Penalize overbought conditions slightly
+    if daily_rsi > 80:
+        score -= (daily_rsi - 80) * 2
     
     return score
 
@@ -319,7 +339,7 @@ def scan_ticker(ticker, display_name):
             emoji = "💀💀"
             
         # Calculate bullish score for sorting
-        bullish_score = calculate_bullish_score(latest_daily_rsi, latest_weekly_rsi, ema_aligned)
+        bullish_score = calculate_bullish_score(latest_daily_rsi, latest_weekly_rsi, ema_aligned, pct_change)
         
         # Current price
         current_price = daily_data['Close'].iloc[-1]
@@ -449,32 +469,32 @@ def create_chart(result):
 def display_signal_legend():
     """Display the signal legend attractively"""
     st.markdown("""
-    <div class="legend-container">
-        <h3 style="margin-top:0;">📊 Signal Legend</h3>
-        <table style="width:100%">
+    <div class="legend-container" style="background-color: #f8f9fa; color: #212529; border-left: 5px solid #4CAF50;">
+        <h3 style="margin-top:0; color: #212529;">📊 Signal Legend</h3>
+        <table style="width:100%; color: #212529;">
             <tr>
                 <td style="padding:10px;width:60px;text-align:center;"><span style="font-size:24px;">🚀🚀</span></td>
-                <td>Both Daily and Weekly Bullish</td>
+                <td style="color: #212529;">Both Daily and Weekly Bullish</td>
             </tr>
             <tr>
                 <td style="padding:10px;width:60px;text-align:center;"><span style="font-size:24px;">🕣🕣</span></td>
-                <td>Daily Bearish, Weekly Bullish (Clock)</td>
+                <td style="color: #212529;">Daily Bearish, Weekly Bullish (Clock)</td>
             </tr>
             <tr>
                 <td style="padding:10px;width:60px;text-align:center;"><span style="font-size:24px;">⚠️⚠️</span></td>
-                <td>Daily Bullish, Weekly Bearish (Caution)</td>
+                <td style="color: #212529;">Daily Bullish, Weekly Bearish (Caution)</td>
             </tr>
             <tr>
                 <td style="padding:10px;width:60px;text-align:center;"><span style="font-size:24px;">💀💀</span></td>
-                <td>Both Daily and Weekly Bearish</td>
+                <td style="color: #212529;">Both Daily and Weekly Bearish</td>
             </tr>
             <tr>
                 <td style="padding:10px;width:60px;text-align:center;"><span style="font-size:24px;">✅</span></td>
-                <td>EMAs aligned (7 EMA > 11 EMA > 21 EMA) on Daily Timeframe</td>
+                <td style="color: #212529;">EMAs aligned (7 EMA > 11 EMA > 21 EMA) on Daily Timeframe</td>
             </tr>
             <tr>
                 <td style="padding:10px;width:60px;text-align:center;"><span style="font-size:24px;">❌</span></td>
-                <td>EMAs NOT aligned on Daily Timeframe</td>
+                <td style="color: #212529;">EMAs NOT aligned on Daily Timeframe</td>
             </tr>
         </table>
     </div>
@@ -580,6 +600,20 @@ def main():
     
     # Display legend
     display_signal_legend()
+    
+    # Add an RSI color legend next to the main legend
+    st.markdown("""
+    <div style="background-color: #f8f9fa; padding: 15px; border-radius: 10px; margin-top: 15px; color: #212529;">
+        <h4 style="margin-top:0; color: #212529;">RSI Color Guide</h4>
+        <ul style="list-style-type: none; padding-left: 10px;">
+            <li><span style="color: #F44336; font-weight: bold;">Red (>70)</span>: Overbought - potential reversal</li>
+            <li><span style="color: #4CAF50; font-weight: bold;">Green (<30)</span>: Oversold - potential reversal</li>
+            <li><span style="color: #AED581;">Light Green (>50)</span>: Bullish momentum</li>
+            <li><span style="color: #EF9A9A;">Light Red (<50)</span>: Bearish momentum</li>
+        </ul>
+        <p style="margin-bottom:0;">The <b>Change %</b> column shows the daily price change percentage. Green indicates positive change, red indicates negative.</p>
+    </div>
+    """, unsafe_allow_html=True)
     
     # Create placeholder for results
     results_placeholder = st.empty()
