@@ -657,12 +657,38 @@ def main():
         
         st.subheader("📊 Scan Settings")
         
-        # Category selection
+        # Quick selection buttons
+        selection_cols = st.columns(3)
+        
+        # Get all categories and stock categories
+        all_categories = list(TICKER_CATEGORIES.keys())
+        stock_categories = [cat for cat in all_categories if "STOCKS" in cat]
+        
+        # Default to all categories if none selected yet
+        if "selected_categories" not in st.session_state:
+            st.session_state.selected_categories = all_categories
+        
+        # Select All button
+        if selection_cols[0].button("Select All"):
+            st.session_state.selected_categories = all_categories
+        
+        # Select Stocks Only button
+        if selection_cols[1].button("Stocks Only"):
+            st.session_state.selected_categories = stock_categories
+        
+        # Clear All button
+        if selection_cols[2].button("Clear All"):
+            st.session_state.selected_categories = []
+        
+        # Category selection with session state
         selected_categories = st.multiselect(
             "Select Markets to Scan",
-            options=list(TICKER_CATEGORIES.keys()),
-            default=list(TICKER_CATEGORIES.keys())
+            options=all_categories,
+            default=st.session_state.selected_categories
         )
+        
+        # Update session state
+        st.session_state.selected_categories = selected_categories
         
         # Scan interval
         refresh_interval = st.slider(
