@@ -244,6 +244,40 @@ US_STOCKS = {
     "TXN": "Texas Instruments"
 }
 
+# Euro Stoxx stocks
+EURO_STOCKS = {
+    "AIR.PA": "Airbus",
+    "ALV.DE": "Allianz",
+    "ADS.DE": "Adidas",
+    "ASML.AS": "ASML Holding",
+    "BAS.DE": "BASF",
+    "BAYN.DE": "Bayer",
+    "BMW.DE": "BMW",
+    "BNP.PA": "BNP Paribas",
+    "CS.PA": "AXA",
+    "DAI.DE": "Daimler",
+    "DB1.DE": "Deutsche Börse",
+    "DPW.DE": "Deutsche Post",
+    "DTE.DE": "Deutsche Telekom",
+    "ENEL.MI": "Enel",
+    "ENGI.PA": "ENGIE",
+    "ENI.MI": "Eni",
+    "IBE.MC": "Iberdrola",
+    "IFX.DE": "Infineon",
+    "ISP.MI": "Intesa Sanpaolo",
+    "KER.PA": "Kering",
+    "MC.PA": "LVMH",
+    "MUV2.DE": "Munich Re",
+    "NOKIA.HE": "Nokia",
+    "OR.PA": "L'Oréal",
+    "SAF.PA": "Safran",
+    "SAN.MC": "Banco Santander",
+    "SAP.DE": "SAP",
+    "SIE.DE": "Siemens",
+    "SU.PA": "Schneider Electric",
+    "VNA.DE": "Vonovia"
+}
+
 # All categories in a dictionary
 TICKER_CATEGORIES = {
     "INDICES": INDICES,
@@ -251,7 +285,8 @@ TICKER_CATEGORIES = {
     "COMMODITIES": COMMODITIES,
     "TREASURIES": TREASURIES,
     "FTSE STOCKS": FTSE_STOCKS,
-    "US STOCKS": US_STOCKS
+    "US STOCKS": US_STOCKS,
+    "EURO STOCKS": EURO_STOCKS
 }
 
 @st.cache_data(ttl=600)
