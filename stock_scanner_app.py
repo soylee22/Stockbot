@@ -7,10 +7,10 @@ from datetime import datetime, timedelta
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-# Set page config
+# Set page config - favicon needs to be in the same folder as your script
 st.set_page_config(
     page_title="Slater Stockbot",
-    page_icon="favicon-32x32.png",
+    page_icon="favicon.ico",  # Just use the filename if in same directory
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -1015,12 +1015,19 @@ def format_dataframe(df):
 def main():
     # Sidebar configuration
     with st.sidebar:
-        st.markdown("""
-        <div style="text-align: center; padding: 1rem 0;">
-            <img src="837934968543099023.png" style="max-width: 80%; height: auto; margin-bottom: 1rem;">
-            <h1 style="font-size: 1.5rem; margin-top: 0.5rem;">Slater Stockbot</h1>
-        </div>
-        """, unsafe_allow_html=True)
+        # Logo at the top
+        try:
+            # Try to open and display the logo - using st.image which is more reliable
+            st.image("837934968543099023.png", width=180)
+        except:
+            # Fallback if image isn't found
+            st.markdown("""
+            <div style="text-align: center; padding: 1rem 0; background-color: #f0f2f6; border-radius: 10px;">
+                <h2 style="color: #2E5BFF;">Slater Stockbot</h2>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        st.title("Slater Stockbot")
         
         st.markdown("<div style='height: 1px; background-color: #E5E7EB; margin: 0.5rem 0 1.5rem;'></div>", unsafe_allow_html=True)
         
