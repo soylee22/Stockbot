@@ -512,9 +512,10 @@ def format_dataframe(df):
     # Make a copy to ensure we don't modify the original
     df = df.copy()
     
-    # Convert Change % to numeric (removing % sign if present)
+    # Convert Change % to numeric (removing % sign if present) and round to 2 decimal places
     if 'Change %' in df.columns:
         df['Change %'] = pd.to_numeric(df['Change %'].str.replace('%', ''), errors='coerce')
+        df['Change %'] = df['Change %'].round(2).astype(str)
     
     # Convert RSI columns to numeric
     if 'Daily RSI' in df.columns:
@@ -530,7 +531,7 @@ def format_dataframe(df):
     
     # Format the price change column
     df_styled = df_styled.map(
-        lambda x: f'color: {"#4CAF50" if x > 0 else "#F44336"}; font-weight: bold',
+        lambda x: f'color: {"#4CAF50" if float(x) > 0 else "#F44336"}; font-weight: bold' if x != 'nan' else '',
         subset=['Change %']
     )
     
