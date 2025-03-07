@@ -9,7 +9,7 @@ from plotly.subplots import make_subplots
 
 # Set page config
 st.set_page_config(
-    page_title="Market Signal Scanner",
+    page_title="TradePulse Market Scanner",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -18,103 +18,425 @@ st.set_page_config(
 # Custom CSS for styling
 st.markdown("""
 <style>
-    /* Main container */
+    /* Main Theme Settings */
+    :root {
+        --primary-color: #2E5BFF;
+        --primary-light: #E9EFFF;
+        --secondary-color: #2EC5FF;
+        --dark-blue: #0A2463;
+        --success-color: #00C48C;
+        --warning-color: #FFB74D;
+        --danger-color: #FF5252;
+        --bg-color: #F8F9FC;
+        --card-bg: #FFFFFF;
+        --text-color: #1F2937;
+        --text-light: #6B7280;
+        --border-color: #E5E7EB;
+        --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        --transition-fast: all 0.2s ease;
+        --font-main: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    /* Base styles */
     .main {
-        background-color: #0e1117;
-        color: #ffffff;
+        background-color: var(--bg-color);
+        color: var(--text-color);
+        font-family: var(--font-main);
+    }
+
+    .stApp {
+        background-color: var(--bg-color) !important;
     }
     
-    /* Headers */
-    h1, h2, h3 {
-        color: #ffffff;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    /* Typography */
+    h1, h2, h3, h4, h5, h6 {
+        color: var(--dark-blue);
+        font-family: var(--font-main);
+        font-weight: 600;
     }
     
-    /* Signal legend */
-    .legend-container {
-        background-color: #f8f9fa;
+    h1 {
+        font-size: 1.875rem;
+        letter-spacing: -0.025em;
+    }
+    
+    h2 {
+        font-size: 1.5rem;
+        letter-spacing: -0.025em;
+    }
+    
+    h3 {
+        font-size: 1.25rem;
+    }
+    
+    /* Overwriting default Streamlit elements */
+    .stButton>button {
+        background-color: var(--primary-color);
+        color: white;
+        border-radius: 6px;
+        border: none;
+        padding: 0.5rem 1rem;
+        font-weight: 500;
+        transition: var(--transition-fast);
+        box-shadow: var(--shadow-sm);
+        margin-bottom: 0.5rem;
+    }
+    
+    .stButton>button:hover {
+        background-color: var(--dark-blue);
+        box-shadow: var(--shadow-md);
+        transform: translateY(-1px);
+    }
+    
+    .stTextInput>div>div>input {
+        border-radius: 6px;
+    }
+    
+    .stSlider>div>div>div {
+        background-color: var(--primary-color);
+    }
+    
+    /* Cards */
+    .card {
+        background-color: var(--card-bg);
         border-radius: 10px;
-        padding: 15px;
-        margin-bottom: 20px;
-        border-left: 5px solid #4CAF50;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        box-shadow: var(--shadow-md);
+        border: 1px solid var(--border-color);
+        transition: var(--transition-fast);
     }
     
-    /* Category headers */
-    .category-header {
-        background: linear-gradient(90deg, #1e2233 0%, #0e1117 100%);
-        padding: 10px;
-        border-radius: 5px;
-        margin: 10px 0;
-        font-weight: bold;
-        text-transform: uppercase;
-        letter-spacing: 1px;
+    .card:hover {
+        box-shadow: var(--shadow-lg);
+        transform: translateY(-2px);
+    }
+    
+    .card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+        border-bottom: 1px solid var(--border-color);
+        padding-bottom: 0.75rem;
+    }
+    
+    .card-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--dark-blue);
+        margin: 0;
+    }
+    
+    /* Data Tables */
+    .dataframe-container {
+        border-radius: 8px;
+        overflow: hidden;
+        border: 1px solid var(--border-color);
+        box-shadow: var(--shadow-sm);
+    }
+    
+    .dataframe {
+        border-collapse: separate;
+        border-spacing: 0;
+        width: 100%;
+    }
+    
+    .dataframe th {
+        background-color: var(--primary-light);
+        color: var(--dark-blue);
+        font-weight: 600;
+        text-align: left;
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid var(--border-color);
+    }
+    
+    .dataframe td {
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid var(--border-color);
+        transition: var(--transition-fast);
+    }
+    
+    .dataframe tr:last-child td {
+        border-bottom: none;
+    }
+    
+    .dataframe tr:hover td {
+        background-color: rgba(46, 91, 255, 0.05);
+    }
+    
+    /* Sidebar */
+    .css-1d391kg, .css-163ttbj, [data-testid="stSidebar"] {
+        background-color: var(--card-bg);
+        border-right: 1px solid var(--border-color);
     }
     
     /* Metrics */
-    .css-1wivap2 {
-        background-color: #1e2233;
+    .metric-card {
+        background-color: var(--card-bg);
         border-radius: 8px;
-        padding: 10px;
+        padding: 1rem;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        text-align: center;
+        transition: var(--transition-fast);
     }
     
-    /* Signal indicators */
-    .signal-emoji {
-        font-size: 24px;
-        margin-right: 10px;
+    .metric-card:hover {
+        box-shadow: var(--shadow-md);
+        transform: translateY(-2px);
     }
     
-    /* Table styling */
-    .dataframe-container {
+    .metric-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--primary-color);
+        margin: 0.5rem 0;
+    }
+    
+    .metric-label {
+        font-size: 0.875rem;
+        color: var(--text-light);
+        margin: 0;
+    }
+    
+    /* Signals legend */
+    .legend-container {
+        background-color: var(--card-bg);
         border-radius: 10px;
-        overflow: hidden;
-        border: 1px solid #2d3546;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        box-shadow: var(--shadow-md);
+        border: 1px solid var(--border-color);
+        border-left: 4px solid var(--primary-color);
+        transition: var(--transition-fast);
+    }
+    
+    .legend-container:hover {
+        box-shadow: var(--shadow-lg);
+    }
+    
+    .legend-title {
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: var(--dark-blue);
+        margin-top: 0;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+    }
+    
+    .legend-title svg {
+        margin-right: 0.5rem;
+    }
+    
+    /* Guide container */
+    .guide-container {
+        background-color: var(--card-bg);
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin-top: 1rem;
+        box-shadow: var(--shadow-md);
+        border: 1px solid var(--border-color);
+        border-left: 4px solid var(--warning-color);
+        transition: var(--transition-fast);
+    }
+    
+    .guide-container:hover {
+        box-shadow: var(--shadow-lg);
+    }
+    
+    /* Tabs styling */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 0.5rem;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        height: 3rem;
+        white-space: pre-wrap;
+        background-color: var(--card-bg);
+        border-radius: 6px 6px 0 0;
+        gap: 0.5rem;
+        padding: 0 1rem;
+        border: 1px solid var(--border-color);
+        border-bottom: none;
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background-color: var(--primary-light);
+        border-top: 3px solid var(--primary-color);
     }
     
     /* Status indicators */
     .status-bullish {
-        color: #4CAF50;
-        font-weight: bold;
-    }
-    .status-bearish {
-        color: #F44336;
-        font-weight: bold;
+        color: var(--success-color);
+        font-weight: 600;
     }
     
-    /* Hover effects */
-    .hover-effect:hover {
-        transform: scale(1.02);
-        transition: transform 0.2s;
+    .status-bearish {
+        color: var(--danger-color);
+        font-weight: 600;
     }
     
     /* Refresh timer */
     .refresh-timer {
         text-align: center;
-        padding: 10px;
-        background-color: #1e2233;
+        padding: 0.75rem;
+        background-color: var(--card-bg);
         border-radius: 8px;
-        margin-top: 20px;
+        margin-top: 1.5rem;
+        border: 1px solid var(--border-color);
+        box-shadow: var(--shadow-sm);
     }
     
-    /* Sidebar styling */
-    .css-1d391kg {
-        background-color: #1a1c25;
+    /* Animations */
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
     }
     
-    /* Card layout */
-    .card {
-        background-color: #1e2233;
+    .animate-fade-in {
+        animation: fadeIn 0.5s ease forwards;
+    }
+    
+    /* Custom selection buttons */
+    .selection-button {
+        background-color: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        padding: 0.5rem 0.75rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: var(--text-color);
+        cursor: pointer;
+        transition: var(--transition-fast);
+        text-align: center;
+        box-shadow: var(--shadow-sm);
+    }
+    
+    .selection-button:hover {
+        background-color: var(--primary-light);
+        border-color: var(--primary-color);
+        box-shadow: var(--shadow-md);
+    }
+    
+    .selection-button.active {
+        background-color: var(--primary-color);
+        color: white;
+        border-color: var(--primary-color);
+    }
+    
+    /* Multi-select styling */
+    div[data-baseweb="select"] {
+        border-radius: 6px;
+    }
+    
+    /* Badge/pill styling for categories */
+    .category-badge {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        background-color: var(--primary-light);
+        color: var(--primary-color);
+        margin-right: 0.5rem;
+        margin-bottom: 0.5rem;
+        transition: var(--transition-fast);
+    }
+    
+    .category-badge:hover {
+        background-color: var(--primary-color);
+        color: white;
+    }
+    
+    /* Dashboard header */
+    .dashboard-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid var(--border-color);
+    }
+    
+    .dashboard-title {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--dark-blue);
+        margin: 0;
+        display: flex;
+        align-items: center;
+    }
+    
+    .dashboard-title svg {
+        margin-right: 0.75rem;
+    }
+    
+    .last-updated {
+        font-size: 0.875rem;
+        color: var(--text-light);
+    }
+    
+    /* Top performer cards */
+    .performer-card {
+        background-color: var(--card-bg);
         border-radius: 10px;
-        padding: 15px;
-        margin-bottom: 15px;
+        overflow: hidden;
+        transition: var(--transition-fast);
+        box-shadow: var(--shadow-md);
+        height: 100%;
     }
     
-    /* Guide */
-    .guide-container {
-        background-color: #f8f9fa;
-        color: #212529;
-        border-radius: 10px;
-        padding: 15px;
-        margin-top: 15px;
+    .performer-card:hover {
+        box-shadow: var(--shadow-lg);
+        transform: translateY(-3px);
+    }
+    
+    .performer-header {
+        padding: 1rem;
+        border-bottom: 1px solid var(--border-color);
+        background-color: var(--primary-light);
+    }
+    
+    .performer-title {
+        font-weight: 600;
+        color: var(--dark-blue);
+        margin: 0;
+        font-size: 1rem;
+    }
+    
+    .performer-content {
+        padding: 1rem;
+    }
+    
+    .performer-metrics {
+        display: flex;
+        gap: 1rem;
+        margin-top: 0.5rem;
+    }
+    
+    .performer-metric {
+        flex: 1;
+        text-align: center;
+    }
+    
+    .performer-metric-value {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--primary-color);
+    }
+    
+    .performer-metric-label {
+        font-size: 0.75rem;
+        color: var(--text-light);
+    }
+    
+    /* Progress bar styling */
+    .stProgress > div > div > div {
+        background-color: var(--primary-color);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -562,32 +884,38 @@ def create_chart(result):
 def display_signal_legend():
     """Display the signal legend attractively"""
     st.markdown("""
-    <div class="legend-container" style="background-color: #f8f9fa; color: #212529; border-left: 5px solid #4CAF50;">
-        <h3 style="margin-top:0; color: #212529;">📊 Signal Legend</h3>
-        <table style="width:100%; color: #212529;">
+    <div class="legend-container animate-fade-in">
+        <h3 class="legend-title">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 3v18h18"/>
+                <path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3"/>
+            </svg>
+            Signal Indicators
+        </h3>
+        <table style="width:100%; color: #1F2937;">
             <tr>
                 <td style="padding:10px;width:60px;text-align:center;"><span style="font-size:24px;">🚀🚀</span></td>
-                <td style="color: #212529;">Both Daily and Weekly Bullish</td>
+                <td style="color: #1F2937; font-weight: 500;">Both Daily and Weekly Bullish</td>
             </tr>
             <tr>
                 <td style="padding:10px;width:60px;text-align:center;"><span style="font-size:24px;">🕣🕣</span></td>
-                <td style="color: #212529;">Daily Bearish, Weekly Bullish (Clock)</td>
+                <td style="color: #1F2937; font-weight: 500;">Daily Bearish, Weekly Bullish (Clock)</td>
             </tr>
             <tr>
                 <td style="padding:10px;width:60px;text-align:center;"><span style="font-size:24px;">⚠️⚠️</span></td>
-                <td style="color: #212529;">Daily Bullish, Weekly Bearish (Caution)</td>
+                <td style="color: #1F2937; font-weight: 500;">Daily Bullish, Weekly Bearish (Caution)</td>
             </tr>
             <tr>
                 <td style="padding:10px;width:60px;text-align:center;"><span style="font-size:24px;">💀💀</span></td>
-                <td style="color: #212529;">Both Daily and Weekly Bearish</td>
+                <td style="color: #1F2937; font-weight: 500;">Both Daily and Weekly Bearish</td>
             </tr>
             <tr>
                 <td style="padding:10px;width:60px;text-align:center;"><span style="font-size:24px;">✅</span></td>
-                <td style="color: #212529;">EMAs aligned (7 EMA > 11 EMA > 21 EMA) on Daily Timeframe</td>
+                <td style="color: #1F2937; font-weight: 500;">EMAs aligned (7 EMA > 11 EMA > 21 EMA) on Daily Timeframe</td>
             </tr>
             <tr>
                 <td style="padding:10px;width:60px;text-align:center;"><span style="font-size:24px;">❌</span></td>
-                <td style="color: #212529;">EMAs NOT aligned on Daily Timeframe</td>
+                <td style="color: #1F2937; font-weight: 500;">EMAs NOT aligned on Daily Timeframe</td>
             </tr>
         </table>
     </div>
@@ -596,15 +924,42 @@ def display_signal_legend():
 def display_rsi_guide():
     """Display the RSI color guide"""
     st.markdown("""
-    <div class="guide-container">
-        <h4 style="margin-top:0; color: #212529;">RSI Color Guide</h4>
-        <ul style="list-style-type: none; padding-left: 10px; color: #212529;">
-            <li><span style="color: #00B050; font-weight: bold;">Strong Green (>70)</span>: Strong bullish momentum</li>
-            <li><span style="color: #92D050;">Light Green (>50)</span>: Bullish momentum</li>
-            <li><span style="color: #FF6666;">Light Red (<50)</span>: Bearish momentum</li>
-            <li><span style="color: #FF0000; font-weight: bold;">Strong Red (<30)</span>: Strong bearish momentum</li>
+    <div class="guide-container animate-fade-in">
+        <h3 class="legend-title">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="16" x2="12" y2="12"/>
+                <line x1="12" y1="8" x2="12" y2="8"/>
+            </svg>
+            RSI Indicator Guide
+        </h3>
+        <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 15px;">
+            <div class="category-badge" style="background-color: #e6f4ea; color: #00B050;">Strong Bullish</div>
+            <div class="category-badge" style="background-color: #f1f8e9; color: #92D050;">Bullish</div>
+            <div class="category-badge" style="background-color: #feeaeb; color: #FF6666;">Bearish</div>
+            <div class="category-badge" style="background-color: #ffdada; color: #FF0000;">Strong Bearish</div>
+        </div>
+        <ul style="list-style-type: none; padding-left: 10px; color: #1F2937;">
+            <li style="margin-bottom: 8px; display: flex; align-items: center;">
+                <span style="width: 16px; height: 16px; display: inline-block; background-color: #00B050; border-radius: 4px; margin-right: 10px;"></span>
+                <strong>Strong Green (>70)</strong>: Strong bullish momentum
+            </li>
+            <li style="margin-bottom: 8px; display: flex; align-items: center;">
+                <span style="width: 16px; height: 16px; display: inline-block; background-color: #92D050; border-radius: 4px; margin-right: 10px;"></span>
+                <strong>Light Green (>50)</strong>: Bullish momentum
+            </li>
+            <li style="margin-bottom: 8px; display: flex; align-items: center;">
+                <span style="width: 16px; height: 16px; display: inline-block; background-color: #FF6666; border-radius: 4px; margin-right: 10px;"></span>
+                <strong>Light Red (<50)</strong>: Bearish momentum
+            </li>
+            <li style="margin-bottom: 8px; display: flex; align-items: center;">
+                <span style="width: 16px; height: 16px; display: inline-block; background-color: #FF0000; border-radius: 4px; margin-right: 10px;"></span>
+                <strong>Strong Red (<30)</strong>: Strong bearish momentum
+            </li>
         </ul>
-        <p style="margin-bottom:0; color: #212529;">The <b>Change %</b> column shows the daily price change percentage. Green indicates positive change, red indicates negative.</p>
+        <p style="margin-bottom:0; color: #1F2937; padding-top: 10px; border-top: 1px solid #E5E7EB;">
+            The <b>Change %</b> column shows the daily price change percentage. Green indicates positive change, red indicates negative.
+        </p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -660,12 +1015,33 @@ def format_dataframe(df):
 def main():
     # Sidebar configuration
     with st.sidebar:
-        st.title("Market Scanner")
-        st.markdown("---")
+        st.markdown("""
+        <div style="text-align: center; padding: 1rem 0;">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M3 3V21H21" stroke="#2E5BFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M7 15L11 11L15 15L21 9" stroke="#2E5BFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <h1 style="font-size: 1.5rem; margin-top: 0.5rem;">TradePulse</h1>
+        </div>
+        """, unsafe_allow_html=True)
         
-        st.subheader("📊 Scan Settings")
+        st.markdown("<div style='height: 1px; background-color: #E5E7EB; margin: 0.5rem 0 1.5rem;'></div>", unsafe_allow_html=True)
+        
+        st.markdown("""
+        <div style="display: flex; align-items: center; margin-bottom: 1rem;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-right: 10px;">
+                <path d="M12 8V12L15 15" stroke="#2E5BFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="12" cy="12" r="9" stroke="#2E5BFF" stroke-width="2"/>
+            </svg>
+            <h2 style="margin: 0; font-size: 1.25rem;">Scan Settings</h2>
+        </div>
+        """, unsafe_allow_html=True)
         
         # Quick selection buttons
+        st.markdown("""
+        <p style="font-size: 0.875rem; color: #6B7280; margin-bottom: 0.5rem;">Quick Select</p>
+        """, unsafe_allow_html=True)
+        
         selection_cols = st.columns(3)
         
         # Get all categories and stock categories
@@ -675,22 +1051,48 @@ def main():
         # Default to all categories if none selected yet
         if "selected_categories" not in st.session_state:
             st.session_state.selected_categories = all_categories
+            
+        # Custom button styling
+        button_style = """
+        <style>
+        div[data-testid="column"] button {
+            width: 100%;
+            border: none;
+            box-shadow: none;
+        }
+        
+        div[data-testid="column"]:nth-child(1) button {
+            background-color: #2E5BFF;
+        }
+        
+        div[data-testid="column"]:nth-child(2) button {
+            background-color: #2EC5FF;
+        }
+        
+        div[data-testid="column"]:nth-child(3) button {
+            background-color: #9E9E9E;
+        }
+        </style>
+        """
+        st.markdown(button_style, unsafe_allow_html=True)
         
         # Select All button
-        if selection_cols[0].button("Select All"):
+        if selection_cols[0].button("Select All", key="select_all"):
             st.session_state.selected_categories = all_categories
         
         # Select Stocks Only button
-        if selection_cols[1].button("Stocks Only"):
+        if selection_cols[1].button("Stocks Only", key="stocks_only"):
             st.session_state.selected_categories = stock_categories
         
         # Clear All button
-        if selection_cols[2].button("Clear All"):
+        if selection_cols[2].button("Clear All", key="clear_all"):
             st.session_state.selected_categories = []
         
         # Category selection with session state
+        st.markdown("<p style='font-size: 0.875rem; color: #6B7280; margin: 1rem 0 0.5rem;'>Market Categories</p>", unsafe_allow_html=True)
+        
         selected_categories = st.multiselect(
-            "Select Markets to Scan",
+            "",  # Empty label since we're using the custom label above
             options=all_categories,
             default=st.session_state.selected_categories
         )
@@ -699,8 +1101,9 @@ def main():
         st.session_state.selected_categories = selected_categories
         
         # Scan interval
+        st.markdown("<p style='font-size: 0.875rem; color: #6B7280; margin: 1rem 0 0.5rem;'>Refresh Interval (minutes)</p>", unsafe_allow_html=True)
         refresh_interval = st.slider(
-            "Auto-refresh Interval (minutes)",
+            "",  # Empty label since we're using the custom label above
             min_value=1,
             max_value=60,
             value=5,
@@ -708,36 +1111,81 @@ def main():
         )
         
         # Display setting
+        st.markdown("<p style='font-size: 0.875rem; color: #6B7280; margin: 1rem 0 0.5rem;'>Display Options</p>", unsafe_allow_html=True)
         show_charts = st.checkbox("Show Charts for Top Performers", value=True)
         
-        st.markdown("---")
-        st.subheader("📈 Market Overview")
+        st.markdown("<div style='height: 1px; background-color: #E5E7EB; margin: 1.5rem 0;'></div>", unsafe_allow_html=True)
+        
+        st.markdown("""
+        <div style="display: flex; align-items: center; margin-bottom: 1rem;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-right: 10px;">
+                <path d="M10 3H3V10H10V3Z" stroke="#2E5BFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M21 3H14V10H21V3Z" stroke="#2E5BFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M21 14H14V21H21V14Z" stroke="#2E5BFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M10 14H3V21H10V14Z" stroke="#2E5BFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <h2 style="margin: 0; font-size: 1.25rem;">Market Overview</h2>
+        </div>
+        """, unsafe_allow_html=True)
         
         # Create placeholder for market overview metrics
         market_metrics = st.empty()
         
         # About section
-        st.markdown("---")
-        st.info(
-            "This app scans financial markets for trading signals based on RSI and EMA indicators."
-        )
+        st.markdown("<div style='height: 1px; background-color: #E5E7EB; margin: 1.5rem 0;'></div>", unsafe_allow_html=True)
         
-        # Add version info
-        st.markdown("<div style='text-align:center; font-size:0.8em; color:#666;'>v1.0.0</div>", unsafe_allow_html=True)
+        st.markdown("""
+        <div style="background-color: rgba(46, 91, 255, 0.08); border-radius: 8px; padding: 1rem; margin-top: 1rem;">
+            <p style="margin: 0; font-size: 0.875rem; color: #2E5BFF;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle; margin-right: 5px;">
+                    <circle cx="12" cy="12" r="10" stroke="#2E5BFF" stroke-width="2"/>
+                    <line x1="12" y1="8" x2="12" y2="16" stroke="#2E5BFF" stroke-width="2"/>
+                    <line x1="12" y1="8" x2="12" y2="8" stroke="#2E5BFF" stroke-width="2"/>
+                </svg>
+                TradePulse scans markets for trading signals using RSI and EMA indicators.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Version info
+        st.markdown("""
+        <div style="text-align: center; font-size: 0.75rem; color: #9CA3AF; margin-top: 1rem;">
+            TradePulse v1.0.0
+        </div>
+        """, unsafe_allow_html=True)
     
     # Main page content
-    st.title("📊 Market Signal Scanner")
+    # Dashboard header
+    st.markdown("""
+    <div class="dashboard-header animate-fade-in">
+        <h1 class="dashboard-title">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                <line x1="8" y1="21" x2="16" y2="21"></line>
+                <line x1="12" y1="17" x2="12" y2="21"></line>
+            </svg>
+            Market Signal Dashboard
+        </h1>
+        <div class="last-updated">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 5px;">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+            Last Updated: <span id="current-time">{}</span>
+        </div>
+    </div>
+    """.format(datetime.now().strftime("%Y-%m-%d %H:%M:%S")), unsafe_allow_html=True)
     
-    # Current time with cleaner display
-    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    st.markdown(f"<div style='font-size:1.2em; margin-bottom:20px;'>⏱️ Last Updated: <b>{current_time}</b></div>", unsafe_allow_html=True)
+    # Display legends in tabs
+    st.markdown("<div class='animate-fade-in'>", unsafe_allow_html=True)
+    legends_tabs = st.tabs(["Signal Guide", "RSI Guide"])
     
-    # Display legends
-    col1, col2 = st.columns(2)
-    with col1:
+    with legends_tabs[0]:
         display_signal_legend()
-    with col2:
+    
+    with legends_tabs[1]:
         display_rsi_guide()
+    st.markdown("</div>", unsafe_allow_html=True)
     
     # Create placeholder for results
     results_placeholder = st.empty()
@@ -750,7 +1198,17 @@ def main():
         # Count total tickers to scan
         total_tickers = sum(len(TICKER_CATEGORIES[cat]) for cat in selected_categories)
         
-        with st.spinner(f"Scanning {total_tickers} markets..."):
+        scan_message = st.markdown(f"""
+        <div style="display: flex; align-items: center; margin-bottom: 1rem; color: #2E5BFF;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+            <span style="font-weight: 500;">Scanning {total_tickers} markets...</span>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        with st.spinner(''):
             # Create a progress bar
             progress_bar = st.progress(0)
             
@@ -775,8 +1233,9 @@ def main():
                         tickers_scanned += 1
                         progress_bar.progress(tickers_scanned / total_tickers)
             
-            # Remove progress bar when done
+            # Remove progress elements when done
             progress_bar.empty()
+            scan_message.empty()
             
             # Calculate market metrics for sidebar
             valid_results = [r for r in all_results if not r.get("error")]
@@ -787,10 +1246,41 @@ def main():
                 
                 # Display metrics in sidebar
                 with market_metrics.container():
+                    st.markdown("""
+                    <div style="display: flex; justify-content: space-between; gap: 10px; margin-bottom: 1rem;">
+                    """, unsafe_allow_html=True)
+                    
                     metrics_cols = st.columns(3)
-                    metrics_cols[0].metric("Bullish", f"{bullish_count}", f"{bullish_count/len(valid_results)*100:.1f}%")
-                    metrics_cols[1].metric("Bearish", f"{bearish_count}", f"{bearish_count/len(valid_results)*100:.1f}%")
-                    metrics_cols[2].metric("Mixed", f"{mixed_count}", f"{mixed_count/len(valid_results)*100:.1f}%")
+                    
+                    bull_percent = f"{bullish_count/len(valid_results)*100:.1f}%"
+                    bear_percent = f"{bearish_count/len(valid_results)*100:.1f}%"
+                    mixed_percent = f"{mixed_count/len(valid_results)*100:.1f}%"
+                    
+                    metrics_cols[0].markdown(f"""
+                    <div class="metric-card" style="border-left: 3px solid #00C48C;">
+                        <p class="metric-label">Bullish</p>
+                        <p class="metric-value" style="color: #00C48C;">{bullish_count}</p>
+                        <p style="font-size: 0.75rem; color: #6B7280; margin: 0;">{bull_percent}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    metrics_cols[1].markdown(f"""
+                    <div class="metric-card" style="border-left: 3px solid #FF5252;">
+                        <p class="metric-label">Bearish</p>
+                        <p class="metric-value" style="color: #FF5252;">{bearish_count}</p>
+                        <p style="font-size: 0.75rem; color: #6B7280; margin: 0;">{bear_percent}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    metrics_cols[2].markdown(f"""
+                    <div class="metric-card" style="border-left: 3px solid #FFB74D;">
+                        <p class="metric-label">Mixed</p>
+                        <p class="metric-value" style="color: #FFB74D;">{mixed_count}</p>
+                        <p style="font-size: 0.75rem; color: #6B7280; margin: 0;">{mixed_percent}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    st.markdown("""</div>""", unsafe_allow_html=True)
             
             # Sort all results by bullish score (most bullish first)
             all_results.sort(key=lambda x: x.get("score", -1000), reverse=True)
@@ -802,6 +1292,7 @@ def main():
         
         # Display the results in the main area
         with results_placeholder.container():
+            st.markdown("<div class='animate-fade-in'>", unsafe_allow_html=True)
             # Format the data into a pretty table
             if valid_results:
                 # Create tabs for All and each category
@@ -836,7 +1327,7 @@ def main():
                         )
                         st.markdown('</div>', unsafe_allow_html=True)
                     else:
-                        st.warning("No data available for selected markets.")
+                        st.info("No data available for selected markets.")
                 
                 # Category tabs
                 for i, category in enumerate(selected_categories, 1):
@@ -867,19 +1358,21 @@ def main():
                             )
                             st.markdown('</div>', unsafe_allow_html=True)
                         else:
-                            st.warning(f"No data available for {category}.")
+                            st.info(f"No data available for {category}.")
             else:
                 st.warning("No valid results found. Check your internet connection or try different markets.")
-        
+            st.markdown("</div>", unsafe_allow_html=True)
+            
         # Show charts for top performers if requested
         if show_charts and valid_results:
             with charts_placeholder.container():
+                st.markdown("<div class='animate-fade-in'>", unsafe_allow_html=True)
                 # Create tabs for bulls and bears
                 bull_bear_tabs = st.tabs(["Top Bulls", "Top Bears"])
                 
                 # Top Bulls Tab
                 with bull_bear_tabs[0]:
-                    st.markdown('<div class="card" style="background-color: #f8f9fa;">', unsafe_allow_html=True)
+                    st.markdown('<div class="card">', unsafe_allow_html=True)
                     st.subheader("📈 Top Bulls")
                     
                     # Filter and sort by highest RSI for bulls
@@ -901,23 +1394,26 @@ def main():
                                 if chart:
                                     st.plotly_chart(chart, use_container_width=True)
                                     
-                                    # Add key metrics below chart
-                                    metric_cols = st.columns(3)
-                                    metric_cols[0].metric(
-                                        "Daily RSI", 
-                                        f"{bullish_results[i]['daily_rsi']:.0f}",
-                                        delta=f"{bullish_results[i]['daily_rsi'] - 50:.0f} from 50"
-                                    )
-                                    metric_cols[1].metric(
-                                        "Weekly RSI", 
-                                        f"{bullish_results[i]['weekly_rsi']:.0f}",
-                                        delta=f"{bullish_results[i]['weekly_rsi'] - 50:.0f} from 50"
-                                    )
-                                    metric_cols[2].metric(
-                                        "Today", 
-                                        f"{bullish_results[i]['price']:.4f}",
-                                        delta=f"{bullish_results[i]['pct_change']:.2f}%"
-                                    )
+                                    # Add key metrics below chart in a card
+                                    st.markdown(f"""
+                                    <div style="display: flex; justify-content: space-between; gap: 10px; margin-top: 10px;">
+                                        <div style="flex: 1; background-color: #e6f4ea; border-radius: 8px; padding: 10px; text-align: center;">
+                                            <p style="font-size: 0.75rem; color: #1F2937; margin: 0;">Daily RSI</p>
+                                            <p style="font-size: 1.25rem; font-weight: 600; color: #00C48C; margin: 5px 0;">{bullish_results[i]['daily_rsi']:.0f}</p>
+                                            <p style="font-size: 0.7rem; color: #6B7280; margin: 0;">+{bullish_results[i]['daily_rsi'] - 50:.0f} from 50</p>
+                                        </div>
+                                        <div style="flex: 1; background-color: #e6f4ea; border-radius: 8px; padding: 10px; text-align: center;">
+                                            <p style="font-size: 0.75rem; color: #1F2937; margin: 0;">Weekly RSI</p>
+                                            <p style="font-size: 1.25rem; font-weight: 600; color: #00C48C; margin: 5px 0;">{bullish_results[i]['weekly_rsi']:.0f}</p>
+                                            <p style="font-size: 0.7rem; color: #6B7280; margin: 0;">+{bullish_results[i]['weekly_rsi'] - 50:.0f} from 50</p>
+                                        </div>
+                                        <div style="flex: 1; background-color: {'#e6f4ea' if bullish_results[i]['pct_change'] > 0 else '#feeaeb'}; border-radius: 8px; padding: 10px; text-align: center;">
+                                            <p style="font-size: 0.75rem; color: #1F2937; margin: 0;">Change</p>
+                                            <p style="font-size: 1.25rem; font-weight: 600; color: {'#00C48C' if bullish_results[i]['pct_change'] > 0 else '#FF5252'}; margin: 5px 0;">{bullish_results[i]['pct_change']:.2f}%</p>
+                                            <p style="font-size: 0.7rem; color: #6B7280; margin: 0;">Today</p>
+                                        </div>
+                                    </div>
+                                    """, unsafe_allow_html=True)
                     else:
                         st.info("No strong bullish instruments found.")
                     
@@ -925,7 +1421,7 @@ def main():
                 
                 # Top Bears Tab
                 with bull_bear_tabs[1]:
-                    st.markdown('<div class="card" style="background-color: #f8f9fa;">', unsafe_allow_html=True)
+                    st.markdown('<div class="card">', unsafe_allow_html=True)
                     st.subheader("📉 Top Bears")
                     
                     # Filter and sort by lowest RSI for bears
@@ -948,26 +1444,30 @@ def main():
                                     st.plotly_chart(chart, use_container_width=True)
                                     
                                     # Add key metrics below chart
-                                    metric_cols = st.columns(3)
-                                    metric_cols[0].metric(
-                                        "Daily RSI", 
-                                        f"{bearish_results[i]['daily_rsi']:.0f}",
-                                        delta=f"{bearish_results[i]['daily_rsi'] - 50:.0f} from 50",
-                                        delta_color="inverse"
-                                    )
-                                    metric_cols[1].metric(
-                                        "Weekly RSI", 
-                                        f"{bearish_results[i]['weekly_rsi']:.0f}",
-                                        delta=f"{bearish_results[i]['weekly_rsi'] - 50:.0f} from 50",
-                                        delta_color="inverse"
-                                    )
-                                    metric_cols[2].metric(
-                                        "Today", 
-                                        f"{bearish_results[i]['price']:.4f}",
-                                        delta=f"{bearish_results[i]['pct_change']:.2f}%"
-                                    )
+                                    st.markdown(f"""
+                                    <div style="display: flex; justify-content: space-between; gap: 10px; margin-top: 10px;">
+                                        <div style="flex: 1; background-color: #feeaeb; border-radius: 8px; padding: 10px; text-align: center;">
+                                            <p style="font-size: 0.75rem; color: #1F2937; margin: 0;">Daily RSI</p>
+                                            <p style="font-size: 1.25rem; font-weight: 600; color: #FF5252; margin: 5px 0;">{bearish_results[i]['daily_rsi']:.0f}</p>
+                                            <p style="font-size: 0.7rem; color: #6B7280; margin: 0;">{bearish_results[i]['daily_rsi'] - 50:.0f} from 50</p>
+                                        </div>
+                                        <div style="flex: 1; background-color: #feeaeb; border-radius: 8px; padding: 10px; text-align: center;">
+                                            <p style="font-size: 0.75rem; color: #1F2937; margin: 0;">Weekly RSI</p>
+                                            <p style="font-size: 1.25rem; font-weight: 600; color: #FF5252; margin: 5px 0;">{bearish_results[i]['weekly_rsi']:.0f}</p>
+                                            <p style="font-size: 0.7rem; color: #6B7280; margin: 0;">{bearish_results[i]['weekly_rsi'] - 50:.0f} from 50</p>
+                                        </div>
+                                        <div style="flex: 1; background-color: {'#e6f4ea' if bearish_results[i]['pct_change'] > 0 else '#feeaeb'}; border-radius: 8px; padding: 10px; text-align: center;">
+                                            <p style="font-size: 0.75rem; color: #1F2937; margin: 0;">Change</p>
+                                            <p style="font-size: 1.25rem; font-weight: 600; color: {'#00C48C' if bearish_results[i]['pct_change'] > 0 else '#FF5252'}; margin: 5px 0;">{bearish_results[i]['pct_change']:.2f}%</p>
+                                            <p style="font-size: 0.7rem; color: #6B7280; margin: 0;">Today</p>
+                                        </div>
+                                    </div>
+                                    """, unsafe_allow_html=True)
                     else:
                         st.info("No strong bearish instruments found.")
+                    
+                    st.markdown('</div>', unsafe_allow_html=True)
+                st.markdown("</div>", unsafe_allow_html=True)
         
         # Show errors if any
         errors = [r for r in all_results if r.get("error")]
@@ -983,12 +1483,25 @@ def main():
     st.markdown("---")
     countdown = st.empty()
     
-    # Add the refresh timer
+    # Add the refresh timer with animation
     refresh_time = datetime.now() + timedelta(minutes=refresh_interval)
     countdown.markdown(f"""
     <div class="refresh-timer">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 5px;">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 16 14"></polyline>
+        </svg>
         <span>Next refresh at {refresh_time.strftime('%H:%M:%S')}</span>
     </div>
+    
+    <script>
+        // Update current time every second
+        setInterval(function() {{
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString();
+            document.getElementById('current-time').textContent = now.toISOString().split('T')[0] + ' ' + timeStr;
+        }}, 1000);
+    </script>
     """, unsafe_allow_html=True)
     
     # Schedule the next refresh
