@@ -62,10 +62,30 @@ FOREX = {
     "CHFJPY=X": "CHF/JPY",
 }
 
+# Commodities
+COMMODITIES = {
+    "GC=F": "Gold",
+    "SI=F": "Silver", 
+    "HG=F": "Copper",
+    "NG=F": "Natural Gas",
+    "BZ=F": "Brent Crude Oil",
+    "CL=F": "WTI Crude Oil"
+}
+
+# US Treasuries
+TREASURIES = {
+    "^IRX": "US 3M Treasury",
+    "^FVX": "US 5Y Treasury",
+    "^TNX": "US 10Y Treasury",
+    "^TYX": "US 30Y Treasury"
+}
+
 # All categories in a dictionary
 TICKER_CATEGORIES = {
     "INDICES": INDICES,
-    "FOREX": FOREX
+    "FOREX": FOREX,
+    "COMMODITIES": COMMODITIES,
+    "TREASURIES": TREASURIES
 }
 
 @st.cache_data(ttl=600)
