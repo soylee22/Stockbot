@@ -1726,20 +1726,20 @@ def main():
                 # All Markets tab
                 with tabs[0]:
                     display_data = []
-                        for idx, r in enumerate(all_results, 1):
-                            if not r.get("error"):
-                                display_data.append({
-                                    "Rank": idx,  # Add rank column
-                                    "Signal": r["emoji"],
-                                    "Market": r["display_name"],
-                                    "Daily": r["daily_status"],
-                                    "Weekly": r["weekly_status"],
-                                    "EMA": r["ema_status"],
-                                    "Price": f"{r['price']:.4f}",
-                                    "Change %": f"{r['pct_change']:.2f}",
-                                    "Daily RSI": f"{r['daily_rsi']:.0f}",
-                                    "Weekly RSI": f"{r['weekly_rsi']:.0f}"
-                                })
+                    for idx, r in enumerate(all_results, 1):
+                        if not r.get("error"):
+                            display_data.append({
+                                "Rank": idx,  # Add rank column
+                                "Signal": r["emoji"],
+                                "Market": r["display_name"],
+                                "Daily": r["daily_status"],
+                                "Weekly": r["weekly_status"],
+                                "EMA": r["ema_status"],
+                                "Price": f"{r['price']:.4f}",
+                                "Change %": f"{r['pct_change']:.2f}",
+                                "Daily RSI": f"{r['daily_rsi']:.0f}",
+                                "Weekly RSI": f"{r['weekly_rsi']:.0f}"
+                            })
                     
                     if display_data:
                         df = pd.DataFrame(display_data)
@@ -1758,9 +1758,10 @@ def main():
                 for i, category in enumerate(selected_categories, 1):
                     with tabs[i]:
                         cat_display_data = []
-                        for r in category_results[category]:
+                        for idx, r in enumerate(category_results[category], 1):
                             if not r.get("error"):
                                 cat_display_data.append({
+                                    "Rank": idx,  # Add rank column
                                     "Signal": r["emoji"],
                                     "Market": r["display_name"],
                                     "Daily": r["daily_status"],
@@ -1799,8 +1800,9 @@ def main():
                     with signal_subtabs[0]:
                         if rocket_results:
                             rocket_data = []
-                            for r in rocket_results:
+                            for idx, r in enumerate(rocket_results, 1):
                                 rocket_data.append({
+                                    "Rank": idx,  # Add rank column
                                     "Signal": r["emoji"],
                                     "Market": r["display_name"],
                                     "Daily": r["daily_status"],
@@ -1829,8 +1831,9 @@ def main():
                     with signal_subtabs[1]:
                         if clock_results:
                             clock_data = []
-                            for r in clock_results:
+                            for idx, r in enumerate(clock_results, 1):
                                 clock_data.append({
+                                    "Rank": idx,  # Add rank column
                                     "Signal": r["emoji"],
                                     "Market": r["display_name"],
                                     "Daily": r["daily_status"],
@@ -1859,8 +1862,9 @@ def main():
                     with signal_subtabs[2]:
                         if warning_results:
                             warning_data = []
-                            for r in warning_results:
+                            for idx, r in enumerate(warning_results, 1):
                                 warning_data.append({
+                                    "Rank": idx,  # Add rank column
                                     "Signal": r["emoji"],
                                     "Market": r["display_name"],
                                     "Daily": r["daily_status"],
@@ -1889,8 +1893,9 @@ def main():
                     with signal_subtabs[3]:
                         if death_results:
                             death_data = []
-                            for r in death_results:
+                            for idx, r in enumerate(death_results, 1):
                                 death_data.append({
+                                    "Rank": idx,  # Add rank column
                                     "Signal": r["emoji"],
                                     "Market": r["display_name"],
                                     "Daily": r["daily_status"],
@@ -1917,6 +1922,7 @@ def main():
             else:
                 st.warning("No valid results found. Check your internet connection or try different markets.")
             st.markdown("</div>", unsafe_allow_html=True)
+            
         # Show charts for top performers if requested
         if show_charts and valid_results:
             with charts_placeholder.container():
