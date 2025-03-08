@@ -1708,6 +1708,10 @@ def main():
             
             # Sort all results by bullish score (most bullish first)
             all_results.sort(key=lambda x: x.get("score", -1000), reverse=True)
+            # Assign global ranks to all results
+            for idx, result in enumerate(all_results, 1):
+                if not result.get("error"):
+                    result["global_rank"] = idx
             
             # Sort category results
             for cat in category_results:
@@ -1726,10 +1730,10 @@ def main():
                 # All Markets tab
                 with tabs[0]:
                     display_data = []
-                    for idx, r in enumerate(all_results, 1):
+                    for r in all_results:
                         if not r.get("error"):
                             display_data.append({
-                                "Rank": idx,  # Add rank column
+                                "Rank": r["global_rank"],
                                 "Signal": r["emoji"],
                                 "Market": r["display_name"],
                                 "Daily": r["daily_status"],
@@ -1755,13 +1759,14 @@ def main():
                         st.info("No data available for selected markets.")
                 
                 # Category tabs
+                # Category tabs
                 for i, category in enumerate(selected_categories, 1):
                     with tabs[i]:
                         cat_display_data = []
-                        for idx, r in enumerate(category_results[category], 1):
+                        for r in category_results[category]:
                             if not r.get("error"):
                                 cat_display_data.append({
-                                    "Rank": idx,  # Add rank column
+                                    "Rank": r["global_rank"],  # Changed to use global rank
                                     "Signal": r["emoji"],
                                     "Market": r["display_name"],
                                     "Daily": r["daily_status"],
@@ -1800,9 +1805,9 @@ def main():
                     with signal_subtabs[0]:
                         if rocket_results:
                             rocket_data = []
-                            for idx, r in enumerate(rocket_results, 1):
+                            for r in rocket_results:
                                 rocket_data.append({
-                                    "Rank": idx,  # Add rank column
+                                    "Rank": r["global_rank"],
                                     "Signal": r["emoji"],
                                     "Market": r["display_name"],
                                     "Daily": r["daily_status"],
@@ -1831,9 +1836,9 @@ def main():
                     with signal_subtabs[1]:
                         if clock_results:
                             clock_data = []
-                            for idx, r in enumerate(clock_results, 1):
+                            for r in clock_results:
                                 clock_data.append({
-                                    "Rank": idx,  # Add rank column
+                                    "Rank": r["global_rank"],
                                     "Signal": r["emoji"],
                                     "Market": r["display_name"],
                                     "Daily": r["daily_status"],
@@ -1862,9 +1867,9 @@ def main():
                     with signal_subtabs[2]:
                         if warning_results:
                             warning_data = []
-                            for idx, r in enumerate(warning_results, 1):
+                            for r in warning_results:
                                 warning_data.append({
-                                    "Rank": idx,  # Add rank column
+                                    "Rank": r["global_rank"],
                                     "Signal": r["emoji"],
                                     "Market": r["display_name"],
                                     "Daily": r["daily_status"],
@@ -1893,9 +1898,9 @@ def main():
                     with signal_subtabs[3]:
                         if death_results:
                             death_data = []
-                            for idx, r in enumerate(death_results, 1):
+                            for r in death_results:
                                 death_data.append({
-                                    "Rank": idx,  # Add rank column
+                                    "Rank": r["global_rank"],
                                     "Signal": r["emoji"],
                                     "Market": r["display_name"],
                                     "Daily": r["daily_status"],
