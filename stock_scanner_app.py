@@ -1726,19 +1726,20 @@ def main():
                 # All Markets tab
                 with tabs[0]:
                     display_data = []
-                    for r in all_results:
-                        if not r.get("error"):
-                            display_data.append({
-                                "Signal": r["emoji"],
-                                "Market": r["display_name"],
-                                "Daily": r["daily_status"],
-                                "Weekly": r["weekly_status"],
-                                "EMA": r["ema_status"],
-                                "Price": f"{r['price']:.4f}",
-                                "Change %": f"{r['pct_change']:.2f}",
-                                "Daily RSI": f"{r['daily_rsi']:.0f}",
-                                "Weekly RSI": f"{r['weekly_rsi']:.0f}"
-                            })
+                        for idx, r in enumerate(all_results, 1):
+                            if not r.get("error"):
+                                display_data.append({
+                                    "Rank": idx,  # Add rank column
+                                    "Signal": r["emoji"],
+                                    "Market": r["display_name"],
+                                    "Daily": r["daily_status"],
+                                    "Weekly": r["weekly_status"],
+                                    "EMA": r["ema_status"],
+                                    "Price": f"{r['price']:.4f}",
+                                    "Change %": f"{r['pct_change']:.2f}",
+                                    "Daily RSI": f"{r['daily_rsi']:.0f}",
+                                    "Weekly RSI": f"{r['weekly_rsi']:.0f}"
+                                })
                     
                     if display_data:
                         df = pd.DataFrame(display_data)
