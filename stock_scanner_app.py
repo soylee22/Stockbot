@@ -1719,8 +1719,8 @@ def main():
             st.markdown("<div class='animate-fade-in'>", unsafe_allow_html=True)
             # Format the data into a pretty table
             if valid_results:
-                # Create tabs for All and each category
-                tab_names = ["All Markets"] + selected_categories
+                # Create tabs for All, Categories, and Signal Categories
+                tab_names = ["All Markets"] + selected_categories + ["Signal Categories"]
                 tabs = st.tabs(tab_names)
                 
                 # All Markets tab
@@ -1783,10 +1783,139 @@ def main():
                             st.markdown('</div>', unsafe_allow_html=True)
                         else:
                             st.info(f"No data available for {category}.")
+                
+                # Signal Categories tab
+                with tabs[-1]:  # The last tab (Signal Categories)
+                    signal_subtabs = st.tabs(["🚀 Bulls", "🕣 Waiting", "⚠️ Caution", "💀 Bears"])
+                    
+                    # Group results by signal type
+                    rocket_results = [r for r in valid_results if r["emoji"] == "🚀🚀"]
+                    clock_results = [r for r in valid_results if r["emoji"] == "🕣🕣"]
+                    warning_results = [r for r in valid_results if r["emoji"] == "⚠️⚠️"]
+                    death_results = [r for r in valid_results if r["emoji"] == "💀💀"]
+                    
+                    # Bulls subtab (rocket emoji)
+                    with signal_subtabs[0]:
+                        if rocket_results:
+                            rocket_data = []
+                            for r in rocket_results:
+                                rocket_data.append({
+                                    "Signal": r["emoji"],
+                                    "Market": r["display_name"],
+                                    "Daily": r["daily_status"],
+                                    "Weekly": r["weekly_status"],
+                                    "EMA": r["ema_status"],
+                                    "Price": f"{r['price']:.4f}",
+                                    "Change %": f"{r['pct_change']:.2f}",
+                                    "Daily RSI": f"{r['daily_rsi']:.0f}",
+                                    "Weekly RSI": f"{r['weekly_rsi']:.0f}"
+                                })
+                            
+                            rocket_df = pd.DataFrame(rocket_data)
+                            st.markdown('<div class="dataframe-container">', unsafe_allow_html=True)
+                            st.dataframe(
+                                format_dataframe(rocket_df),
+                                use_container_width=True,
+                                height=400,
+                                hide_index=True
+                            )
+                            st.markdown('</div>', unsafe_allow_html=True)
+                            st.markdown(f"<p style='text-align: right; color: #6B7280; font-size: 0.875rem;'>{len(rocket_results)} markets found</p>", unsafe_allow_html=True)
+                        else:
+                            st.info("No markets with 🚀🚀 signals found.")
+                    
+                    # Waiting subtab (clock emoji)
+                    with signal_subtabs[1]:
+                        if clock_results:
+                            clock_data = []
+                            for r in clock_results:
+                                clock_data.append({
+                                    "Signal": r["emoji"],
+                                    "Market": r["display_name"],
+                                    "Daily": r["daily_status"],
+                                    "Weekly": r["weekly_status"],
+                                    "EMA": r["ema_status"],
+                                    "Price": f"{r['price']:.4f}",
+                                    "Change %": f"{r['pct_change']:.2f}",
+                                    "Daily RSI": f"{r['daily_rsi']:.0f}",
+                                    "Weekly RSI": f"{r['weekly_rsi']:.0f}"
+                                })
+                            
+                            clock_df = pd.DataFrame(clock_data)
+                            st.markdown('<div class="dataframe-container">', unsafe_allow_html=True)
+                            st.dataframe(
+                                format_dataframe(clock_df),
+                                use_container_width=True,
+                                height=400,
+                                hide_index=True
+                            )
+                            st.markdown('</div>', unsafe_allow_html=True)
+                            st.markdown(f"<p style='text-align: right; color: #6B7280; font-size: 0.875rem;'>{len(clock_results)} markets found</p>", unsafe_allow_html=True)
+                        else:
+                            st.info("No markets with 🕣🕣 signals found.")
+                    
+                    # Caution subtab (warning emoji)
+                    with signal_subtabs[2]:
+                        if warning_results:
+                            warning_data = []
+                            for r in warning_results:
+                                warning_data.append({
+                                    "Signal": r["emoji"],
+                                    "Market": r["display_name"],
+                                    "Daily": r["daily_status"],
+                                    "Weekly": r["weekly_status"],
+                                    "EMA": r["ema_status"],
+                                    "Price": f"{r['price']:.4f}",
+                                    "Change %": f"{r['pct_change']:.2f}",
+                                    "Daily RSI": f"{r['daily_rsi']:.0f}",
+                                    "Weekly RSI": f"{r['weekly_rsi']:.0f}"
+                                })
+                            
+                            warning_df = pd.DataFrame(warning_data)
+                            st.markdown('<div class="dataframe-container">', unsafe_allow_html=True)
+                            st.dataframe(
+                                format_dataframe(warning_df),
+                                use_container_width=True,
+                                height=400,
+                                hide_index=True
+                            )
+                            st.markdown('</div>', unsafe_allow_html=True)
+                            st.markdown(f"<p style='text-align: right; color: #6B7280; font-size: 0.875rem;'>{len(warning_results)} markets found</p>", unsafe_allow_html=True)
+                        else:
+                            st.info("No markets with ⚠️⚠️ signals found.")
+                    
+                    # Bears subtab (death emoji)
+                    with signal_subtabs[3]:
+                        if death_results:
+                            death_data = []
+                            for r in death_results:
+                                death_data.append({
+                                    "Signal": r["emoji"],
+                                    "Market": r["display_name"],
+                                    "Daily": r["daily_status"],
+                                    "Weekly": r["weekly_status"],
+                                    "EMA": r["ema_status"],
+                                    "Price": f"{r['price']:.4f}",
+                                    "Change %": f"{r['pct_change']:.2f}",
+                                    "Daily RSI": f"{r['daily_rsi']:.0f}",
+                                    "Weekly RSI": f"{r['weekly_rsi']:.0f}"
+                                })
+                            
+                            death_df = pd.DataFrame(death_data)
+                            st.markdown('<div class="dataframe-container">', unsafe_allow_html=True)
+                            st.dataframe(
+                                format_dataframe(death_df),
+                                use_container_width=True,
+                                height=400,
+                                hide_index=True
+                            )
+                            st.markdown('</div>', unsafe_allow_html=True)
+                            st.markdown(f"<p style='text-align: right; color: #6B7280; font-size: 0.875rem;'>{len(death_results)} markets found</p>", unsafe_allow_html=True)
+                        else:
+                            st.info("No markets with 💀💀 signals found.")
             else:
                 st.warning("No valid results found. Check your internet connection or try different markets.")
             st.markdown("</div>", unsafe_allow_html=True)
-            
         # Show charts for top performers if requested
         if show_charts and valid_results:
             with charts_placeholder.container():
