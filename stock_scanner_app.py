@@ -451,79 +451,6 @@ SYMBOL_EXPLANATION = {
     "❌": "EMAs NOT aligned on Daily Timeframe"
 }
 
-# Hardcoded tickers with proper Yahoo Finance symbols and their display names
-INDICES = {
-    # Major US Indices
-    "^GSPC": "S&P 500",
-    "^IXIC": "NASDAQ Composite",
-    "^DJI": "Dow Jones Industrial",
-    "^RUT": "Russell 2000",
-    # European Indices
-    "^FTSE": "UK FTSE 100",
-    "^GDAXI": "German DAX",
-    "^FCHI": "French CAC 40",
-    "^STOXX50E": "Euro STOXX 50",
-    "^IBEX": "Spanish IBEX 35",
-    "^AEX": "Netherlands AEX",
-    # Added Swiss Market Index (SMI)
-    "^SSMI": "Swiss SMI 20",
-    # Asia Pacific Indices
-    "^AXJO": "Australian ASX 200",
-    "^N225": "Japanese Nikkei 225",
-    "^HSI": "Hong Kong Hang Seng",
-    "000001.SS": "Shanghai Composite",
-    # Added Singapore Straits Times Index (STI)
-    "^STI": "Singapore STI 30",
-}
-
-# Add the TREASURIES dictionary definition before it's used in TICKER_CATEGORIES
-
-# US Treasury ETFs and bond funds
-TREASURIES = {
-    "SHY": "iShares 1-3 Year Treasury Bond ETF",
-    "IEI": "iShares 3-7 Year Treasury Bond ETF",
-    "IEF": "iShares 7-10 Year Treasury Bond ETF",
-    "TLH": "iShares 10-20 Year Treasury Bond ETF",
-    "TLT": "iShares 20+ Year Treasury Bond ETF",
-    "GOVT": "iShares U.S. Treasury Bond ETF",
-    "VGSH": "Vanguard Short-Term Treasury ETF",
-    "VGIT": "Vanguard Intermediate-Term Treasury ETF",
-    "VGLT": "Vanguard Long-Term Treasury ETF",
-    "BND": "Vanguard Total Bond Market ETF",
-    "AGG": "iShares Core U.S. Aggregate Bond ETF",
-    "MBB": "iShares MBS ETF"
-}
-
-# Make sure the FOREX dictionary is defined as well if it's not already
-FOREX = {
-    # Major pairs
-    "EURUSD=X": "EUR/USD",
-    "GBPUSD=X": "GBP/USD",
-    "USDJPY=X": "USD/JPY",
-    "AUDUSD=X": "AUD/USD",
-    "NZDUSD=X": "NZD/USD",
-    # Cross pairs
-    "EURGBP=X": "EUR/GBP",
-    "GBPJPY=X": "GBP/JPY",
-    "EURJPY=X": "EUR/JPY",
-    "GBPAUD=X": "GBP/AUD",
-    "GBPCAD=X": "GBP/CAD",
-    "GBPCHF=X": "GBP/CHF",
-    "CHFJPY=X": "CHF/JPY",
-}
-
-# Now the TICKER_CATEGORIES will work properly with all dictionaries defined
-TICKER_CATEGORIES = {
-    "INDICES": INDICES,
-    "FOREX": FOREX,
-    "COMMODITIES": COMMODITIES,
-    "TREASURIES": TREASURIES,
-    "FTSE STOCKS": FTSE_STOCKS,
-    "US STOCKS": US_STOCKS,
-    "EURO STOCKS": EURO_STOCKS,
-    "ASIAN STOCKS": ASIAN_STOCKS
-}
-
 # Expanded FTSE 100 stocks
 FTSE_STOCKS = {
     # Original listings
@@ -1051,7 +978,9 @@ INDICES = {
     "^STI": "Singapore STI 30",
 }
 
-# Updated Commodities with platinum and palladium
+# Add all required dictionaries in the correct order before they're referenced
+
+# Commodities dictionary definition
 COMMODITIES = {
     "GC=F": "Gold",
     "SI=F": "Silver", 
@@ -1064,8 +993,41 @@ COMMODITIES = {
     "PA=F": "Palladium"
 }
 
+# FOREX dictionary definition
+FOREX = {
+    # Major pairs
+    "EURUSD=X": "EUR/USD",
+    "GBPUSD=X": "GBP/USD",
+    "USDJPY=X": "USD/JPY",
+    "AUDUSD=X": "AUD/USD",
+    "NZDUSD=X": "NZD/USD",
+    # Cross pairs
+    "EURGBP=X": "EUR/GBP",
+    "GBPJPY=X": "GBP/JPY",
+    "EURJPY=X": "EUR/JPY",
+    "GBPAUD=X": "GBP/AUD",
+    "GBPCAD=X": "GBP/CAD",
+    "GBPCHF=X": "GBP/CHF",
+    "CHFJPY=X": "CHF/JPY",
+}
 
-# TICKER_CATEGORIES remains the same structure
+# US Treasury ETFs and bond funds
+TREASURIES = {
+    "SHY": "iShares 1-3 Year Treasury Bond ETF",
+    "IEI": "iShares 3-7 Year Treasury Bond ETF",
+    "IEF": "iShares 7-10 Year Treasury Bond ETF",
+    "TLH": "iShares 10-20 Year Treasury Bond ETF",
+    "TLT": "iShares 20+ Year Treasury Bond ETF",
+    "GOVT": "iShares U.S. Treasury Bond ETF",
+    "VGSH": "Vanguard Short-Term Treasury ETF",
+    "VGIT": "Vanguard Intermediate-Term Treasury ETF",
+    "VGLT": "Vanguard Long-Term Treasury ETF",
+    "BND": "Vanguard Total Bond Market ETF",
+    "AGG": "iShares Core U.S. Aggregate Bond ETF",
+    "MBB": "iShares MBS ETF"
+}
+
+# Make sure TICKER_CATEGORIES uses these defined dictionaries
 TICKER_CATEGORIES = {
     "INDICES": INDICES,
     "FOREX": FOREX,
