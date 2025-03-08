@@ -476,6 +476,25 @@ INDICES = {
     "^STI": "Singapore STI 30",
 }
 
+# Add the TREASURIES dictionary definition before it's used in TICKER_CATEGORIES
+
+# US Treasury ETFs and bond funds
+TREASURIES = {
+    "SHY": "iShares 1-3 Year Treasury Bond ETF",
+    "IEI": "iShares 3-7 Year Treasury Bond ETF",
+    "IEF": "iShares 7-10 Year Treasury Bond ETF",
+    "TLH": "iShares 10-20 Year Treasury Bond ETF",
+    "TLT": "iShares 20+ Year Treasury Bond ETF",
+    "GOVT": "iShares U.S. Treasury Bond ETF",
+    "VGSH": "Vanguard Short-Term Treasury ETF",
+    "VGIT": "Vanguard Intermediate-Term Treasury ETF",
+    "VGLT": "Vanguard Long-Term Treasury ETF",
+    "BND": "Vanguard Total Bond Market ETF",
+    "AGG": "iShares Core U.S. Aggregate Bond ETF",
+    "MBB": "iShares MBS ETF"
+}
+
+# Make sure the FOREX dictionary is defined as well if it's not already
 FOREX = {
     # Major pairs
     "EURUSD=X": "EUR/USD",
@@ -491,6 +510,18 @@ FOREX = {
     "GBPCAD=X": "GBP/CAD",
     "GBPCHF=X": "GBP/CHF",
     "CHFJPY=X": "CHF/JPY",
+}
+
+# Now the TICKER_CATEGORIES will work properly with all dictionaries defined
+TICKER_CATEGORIES = {
+    "INDICES": INDICES,
+    "FOREX": FOREX,
+    "COMMODITIES": COMMODITIES,
+    "TREASURIES": TREASURIES,
+    "FTSE STOCKS": FTSE_STOCKS,
+    "US STOCKS": US_STOCKS,
+    "EURO STOCKS": EURO_STOCKS,
+    "ASIAN STOCKS": ASIAN_STOCKS
 }
 
 # Expanded FTSE 100 stocks
@@ -1033,7 +1064,6 @@ COMMODITIES = {
     "PA=F": "Palladium"
 }
 
-# Keep the original FOREX and TREASURIES (no changes needed)
 
 # TICKER_CATEGORIES remains the same structure
 TICKER_CATEGORIES = {
