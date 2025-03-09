@@ -261,23 +261,31 @@ def analyze_ticker(ticker, name):
                 
                 # Check for crosses in the recent data
                 macd_signal = "NO STRONG SIGNAL"
+                days_since_cross = None
+                cross_date = None
                 last_n_days = min(10, len(data))
                 
                 for i in range(1, last_n_days):
                     # Check for golden cross (MACD crosses above signal line)
                     if (macd_line.iloc[-i] > signal_line.iloc[-i]) & (macd_line.iloc[-(i+1)] <= signal_line.iloc[-(i+1)]):
                         macd_signal = "GOLDEN CROSS"
+                        days_since_cross = i - 1  # -1 because index 0 is today
+                        cross_date = data.index[-i].strftime('%Y-%m-%d')
                         break
                     
                     # Check for death cross (MACD crosses below signal line)
                     if (macd_line.iloc[-i] < signal_line.iloc[-i]) & (macd_line.iloc[-(i+1)] >= signal_line.iloc[-(i+1)]):
                         macd_signal = "DEATH CROSS"
+                        days_since_cross = i - 1  # -1 because index 0 is today
+                        cross_date = data.index[-i].strftime('%Y-%m-%d')
                         break
             except Exception as e:
                 st.warning(f"MACD calculation error for {ticker}: {e}")
                 macd_line = None
                 signal_line = None
                 macd_signal = "Calculation Error"
+                days_since_cross = None
+                cross_date = None
             
             # Check EMA alignment
             try:
@@ -318,6 +326,8 @@ def analyze_ticker(ticker, name):
                 "name": name,
                 "rsi": latest_rsi,
                 "macd_signal": macd_signal,
+                "days_since_cross": days_since_cross,
+                "cross_date": cross_date,
                 "sentiment": sentiment,
                 "sentiment_score": sentiment_score,
                 "symbol": symbol,
@@ -374,6 +384,20 @@ def create_results_dataframe(results):
         # Format RSI value
         rsi_str = f"{r['rsi']:.2f}" if r['rsi'] is not None else "N/A"
         
+        # Format signal with days since cross
+        signal_text = r["macd_signal"]
+        days_since_cross = r.get("days_since_cross")
+        if days_since_cross is not None and signal_text in ["GOLDEN CROSS", "DEATH CROSS"]:
+            # If the cross is today (0 days), show "Today"
+            if days_since_cross == 0:
+                cross_when = "Today"
+            elif days_since_cross == 1:
+                cross_when = "Yesterday"
+            else:
+                cross_when = f"{days_since_cross} days ago"
+                
+            signal_text = f"{signal_text} ({cross_when})"
+        
         # Get the sentiment score (added as third return value to determine_market_sentiment)
         sentiment_score = r.get("sentiment_score", 50)  # Default to neutral if not available
         
@@ -383,7 +407,8 @@ def create_results_dataframe(results):
             "Signal": f"{r['symbol']} {r.get('ema_symbol', '')}",
             "Sentiment": r["sentiment"],
             "RSI": rsi_str,
-            "MACD": r["macd_signal"],
+            "MACD": signal_text,
+            "Cross Date": r.get("cross_date", ""),
             "Score": sentiment_score,  # For sorting
             "_index": results.index(r)  # Store original index to reference back to results
         })
@@ -905,6 +930,11 @@ def main():
                         "MACD": st.column_config.TextColumn(
                             "MACD Signal",
                             width="medium",
+                        ),
+                        "Cross Date": st.column_config.TextColumn(
+                            "Cross Date",
+                            width="small",
+                            help="Date when the MACD cross occurred"
                         ),
                     }
                 )
