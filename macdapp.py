@@ -59,7 +59,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 @st.cache_data(ttl=3600)  # Cache data for 1 hour
-def fetch_data(ticker, period="1mo", interval="1d"):
+def fetch_data(ticker, period="3mo", interval="1d"):
     """Fetch historical data for a ticker"""
     try:
         data = yf.download(ticker, period=period, interval=interval, progress=False)
@@ -95,7 +95,12 @@ def calculate_rsi(data, window=14):
 
 def calculate_macd(data):
     """Calculate MACD and detect crosses"""
-    if data is None or len(data) < 26:  # Need at least 26 days for the MACD
+    if data is None:
+        return None, None, None
+        
+    # Need at least 35 days for the MACD (26 for longest EMA + 9 for signal line)
+    if len(data) < 35:
+        st.warning(f"Only {len(data)} days of data available, need at least 35 for MACD calculation")
         return None, None, None
     
     # Calculate EMAs
