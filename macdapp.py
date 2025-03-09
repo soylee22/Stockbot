@@ -59,16 +59,29 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 @st.cache_data(ttl=3600)  # Cache data for 1 hour
-def fetch_data(ticker, period="3mo", interval="1d"):
+def fetch_data(ticker, period="6mo", interval="1d"):
     """Fetch historical data for a ticker"""
     try:
-        data = yf.download(ticker, period=period, interval=interval, progress=False)
+        # Create a Ticker object
+        ticker_obj = yf.Ticker(ticker)
+        
+        # Fetch historical data
+        data = ticker_obj.history(period=period, interval=interval)
         if data.empty:
-            return None
-        return data
+            return None, None
+            
+        # Fetch indicators directly from Yahoo Finance
+        indicators = {}
+        
+        # Get RSI
+        indicators['rsi'] = ticker_obj.info.get('rsi14') if hasattr(ticker_obj, 'info') and ticker_obj.info else None
+        
+        # If we can't get these indicators directly, we'll calculate them
+        # But the main price data is still useful
+        return data, indicators
     except Exception as e:
         st.error(f"Error fetching data for {ticker}: {e}")
-        return None
+        return None, None
 
 def calculate_rsi(data, window=14):
     """Calculate RSI for the given data"""
@@ -127,6 +140,11 @@ def calculate_macd(data):
 
 def determine_market_sentiment(rsi, macd_signal):
     """Determine market sentiment based on RSI and MACD signals"""
+    # Handle error conditions first
+    if rsi is None or macd_signal is None or macd_signal in ["Insufficient data", "Calculation Error"]:
+        return "UNKNOWN", "❓"
+        
+    # Now determine sentiment based on valid signals
     if macd_signal == "GOLDEN CROSS" and rsi >= 50:
         return "BULLISH", "🚀🚀"
     elif macd_signal == "GOLDEN CROSS" and rsi < 50:
@@ -164,7 +182,7 @@ def analyze_ticker(ticker, name):
     try:
         # Fetch data
         with st.spinner(f"Analyzing {ticker}..."):
-            data = fetch_data(ticker)
+            data, yahoo_indicators = fetch_data(ticker)
             if data is None or len(data) == 0:
                 return {
                     "ticker": ticker,
@@ -179,8 +197,16 @@ def analyze_ticker(ticker, name):
                     "charts": None
                 }
             
-            # Calculate RSI
-            rsi_series, latest_rsi = calculate_rsi(data)
+            # Calculate RSI (or use Yahoo's if available)
+            rsi_from_yahoo = yahoo_indicators.get('rsi') if yahoo_indicators else None
+            
+            if rsi_from_yahoo is not None:
+                rsi_series = pd.Series([rsi_from_yahoo] * len(data.index), index=data.index)
+                latest_rsi = rsi_from_yahoo
+            else:
+                # Fall back to calculation
+                rsi_series, latest_rsi = calculate_rsi(data)
+            
             if latest_rsi is None:
                 return {
                     "ticker": ticker,
@@ -195,24 +221,54 @@ def analyze_ticker(ticker, name):
                     "charts": None
                 }
             
-            # Calculate MACD and detect cross
-            macd_line, signal_line, macd_signal = calculate_macd(data)
-            if macd_signal is None:
-                return {
-                    "ticker": ticker,
-                    "name": name,
-                    "rsi": latest_rsi,
-                    "macd_signal": "Insufficient data",
-                    "sentiment": "No data",
-                    "symbol": "❓",
-                    "ema_aligned": False,
-                    "error": "Insufficient data for MACD calculation",
-                    "data": data,
-                    "charts": None
-                }
+            # Calculate MACD and detect cross (we'll always calculate this ourselves)
+            try:
+                # Calculate EMAs
+                ema12 = data['Close'].ewm(span=12, adjust=False).mean()
+                ema26 = data['Close'].ewm(span=26, adjust=False).mean()
+                
+                # Calculate MACD line and signal line
+                macd_line = ema12 - ema26
+                signal_line = macd_line.ewm(span=9, adjust=False).mean()
+                
+                # Check for crosses in the recent data
+                macd_signal = "NO STRONG SIGNAL"
+                last_n_days = min(10, len(data))
+                
+                for i in range(1, last_n_days):
+                    # Check for golden cross (MACD crosses above signal line)
+                    if (macd_line.iloc[-i] > signal_line.iloc[-i]) & (macd_line.iloc[-(i+1)] <= signal_line.iloc[-(i+1)]):
+                        macd_signal = "GOLDEN CROSS"
+                        break
+                    
+                    # Check for death cross (MACD crosses below signal line)
+                    if (macd_line.iloc[-i] < signal_line.iloc[-i]) & (macd_line.iloc[-(i+1)] >= signal_line.iloc[-(i+1)]):
+                        macd_signal = "DEATH CROSS"
+                        break
+            except Exception as e:
+                st.warning(f"MACD calculation error for {ticker}: {e}")
+                macd_line = None
+                signal_line = None
+                macd_signal = "Calculation Error"
             
             # Check EMA alignment
-            ema_aligned, ema_lines = check_ema_alignment(data)
+            try:
+                # Calculate EMAs
+                ema7 = data['Close'].ewm(span=7, adjust=False).mean()
+                ema11 = data['Close'].ewm(span=11, adjust=False).mean()
+                ema21 = data['Close'].ewm(span=21, adjust=False).mean()
+                
+                # Check if aligned (7 > 11 > 21)
+                if (ema7.iloc[-1] > ema11.iloc[-1]) & (ema11.iloc[-1] > ema21.iloc[-1]):
+                    ema_aligned = True
+                else:
+                    ema_aligned = False
+                
+                ema_lines = (ema7, ema11, ema21)
+            except Exception as e:
+                st.warning(f"EMA calculation error for {ticker}: {e}")
+                ema_aligned = False
+                ema_lines = None
             
             # Determine market sentiment
             sentiment, symbol = determine_market_sentiment(latest_rsi, macd_signal)
