@@ -25,8 +25,12 @@ st.set_page_config(
 # Add custom CSS for styling
 st.markdown("""
 <style>
+    .strongly-bullish { color: #00A100; font-weight: bold; }
     .bullish { color: #0ECB81; font-weight: bold; }
+    .trending-up { color: #7BD9B0; font-weight: bold; }
+    .strongly-bearish { color: #D20000; font-weight: bold; }
     .bearish { color: #F6465D; font-weight: bold; }
+    .trending-down { color: #FF9999; font-weight: bold; }
     .cautious { color: #F0B90B; font-weight: bold; }
     .neutral { color: #8A8A8A; font-weight: bold; }
     .error { color: #FF6B6B; font-style: italic; }
@@ -54,6 +58,20 @@ st.markdown("""
         height: 12px;
         border-radius: 50%;
         margin-right: 5px;
+    }
+    /* Style for the dataframe */
+    .dataframe-container {
+        border-radius: 5px;
+        overflow: hidden;
+    }
+    /* Highlight on hover */
+    .dataframe tr:hover {
+        background-color: rgba(0,0,0,0.05) !important;
+        cursor: pointer;
+    }
+    /* Custom styling for sentiment colors in dataframe */
+    .stDataFrame [data-testid="stDataFrame"] div[data-testid="stHorizontalBlock"] div[data-testid="column"] {
+        padding: 0px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -142,24 +160,34 @@ def determine_market_sentiment(rsi, macd_signal):
     """Determine market sentiment based on RSI and MACD signals"""
     # Handle error conditions first
     if rsi is None or macd_signal is None or macd_signal in ["Insufficient data", "Calculation Error"]:
-        return "UNKNOWN", "❓"
+        return "UNKNOWN", "❓", 0
         
+    # Create a base score for ranking (higher = more bullish)
+    score = 50  # Neutral starting point
+    
     # Now determine sentiment based on valid signals
     if macd_signal == "GOLDEN CROSS" and rsi >= 50:
-        return "BULLISH", "🚀🚀"
+        if rsi >= 70:  # Strong bullish momentum
+            return "STRONGLY BULLISH", "🚀🚀", 100
+        return "BULLISH", "🚀🚀", 80
     elif macd_signal == "GOLDEN CROSS" and rsi < 50:
-        return "CAUTIOUS (Bullish MACD, Weak RSI)", "🕣🕣"
+        return "CAUTIOUS (Bullish MACD, Weak RSI)", "🕣🕣", 60
     elif macd_signal == "DEATH CROSS" and rsi < 50:
-        return "BEARISH", "💀💀"
+        if rsi <= 30:  # Strong bearish momentum
+            return "STRONGLY BEARISH", "💀💀", 0
+        return "BEARISH", "💀💀", 20
     elif macd_signal == "DEATH CROSS" and rsi >= 50:
-        return "CAUTIOUS (Bearish MACD, Strong RSI)", "⚠️⚠️"
+        return "CAUTIOUS (Bearish MACD, Strong RSI)", "⚠️⚠️", 40
     else:
+        # No strong MACD signal but we can still use RSI for direction
         if rsi >= 70:
-            return "NEUTRAL (Possibly Overbought)", "❓"
+            return "TRENDING UP (Strong RSI)", "↗️", 70
         elif rsi <= 30:
-            return "NEUTRAL (Possibly Oversold)", "❓"
+            return "TRENDING DOWN (Weak RSI)", "↘️", 30
+        elif rsi > 50:
+            return "NEUTRAL (Slight Bullish Bias)", "➡️", 55
         else:
-            return "NEUTRAL", "❓"
+            return "NEUTRAL (Slight Bearish Bias)", "➡️", 45
 
 def check_ema_alignment(data):
     """Check if EMAs are aligned (7 > 11 > 21) on daily timeframe"""
@@ -271,7 +299,7 @@ def analyze_ticker(ticker, name):
                 ema_lines = None
             
             # Determine market sentiment
-            sentiment, symbol = determine_market_sentiment(latest_rsi, macd_signal)
+            sentiment, symbol, sentiment_score = determine_market_sentiment(latest_rsi, macd_signal)
             
             # Add EMA symbol
             ema_symbol = "✅" if ema_aligned else "❌"
@@ -291,6 +319,7 @@ def analyze_ticker(ticker, name):
                 "rsi": latest_rsi,
                 "macd_signal": macd_signal,
                 "sentiment": sentiment,
+                "sentiment_score": sentiment_score,
                 "symbol": symbol,
                 "ema_aligned": ema_aligned,
                 "ema_symbol": ema_symbol,
@@ -316,70 +345,67 @@ def analyze_ticker(ticker, name):
 
 def get_sentiment_class(sentiment):
     """Get CSS class for sentiment"""
-    if "BULLISH" in sentiment:
+    if "STRONGLY BULLISH" in sentiment:
+        return "strongly-bullish"
+    elif "BULLISH" in sentiment:
         return "bullish"
+    elif "STRONGLY BEARISH" in sentiment:
+        return "strongly-bearish"
     elif "BEARISH" in sentiment:
         return "bearish"
     elif "CAUTIOUS" in sentiment:
         return "cautious"
+    elif "TRENDING UP" in sentiment:
+        return "trending-up"
+    elif "TRENDING DOWN" in sentiment:
+        return "trending-down"
     else:
         return "neutral"
 
-def display_ticker_card(result):
-    """Display a ticker result card"""
-    ticker = result["ticker"]
-    name = result["name"]
-    rsi = result["rsi"]
-    macd_signal = result["macd_signal"]
-    sentiment = result["sentiment"]
-    symbol = result["symbol"]
-    ema_symbol = result.get("ema_symbol", "❓")
-    error = result["error"]
+def create_results_dataframe(results):
+    """Convert results to a DataFrame for tabular display"""
+    data = []
     
-    # Create a bordered card for the ticker
-    col1, col2 = st.columns([3, 1])
-    
-    with col1:
-        if error:
-            st.markdown(f"""
-            <div class="ticker-card">
-                <h4>{ticker} - {name}</h4>
-                <p class="error">{error}</p>
-            </div>
-            """, unsafe_allow_html=True)
-            return
-        
+    for r in results:
+        if r["error"]:
+            # Skip items with errors or add with default values
+            continue
+            
         # Format RSI value
-        rsi_str = f"{rsi:.2f}" if rsi is not None else "N/A"
+        rsi_str = f"{r['rsi']:.2f}" if r['rsi'] is not None else "N/A"
         
-        # Get sentiment class
-        sentiment_class = get_sentiment_class(sentiment)
+        # Get the sentiment score (added as third return value to determine_market_sentiment)
+        sentiment_score = r.get("sentiment_score", 50)  # Default to neutral if not available
         
-        st.markdown(f"""
-        <div class="ticker-card">
-            <h4>{ticker} - {name}</h4>
-            <p>
-                <span class="symbol">{symbol}</span>
-                <span class="symbol">{ema_symbol}</span>
-                <span class="{sentiment_class}">{sentiment}</span>
-            </p>
-            <p class="small-font">RSI: {rsi_str} | MACD: {macd_signal}</p>
-        </div>
-        """, unsafe_allow_html=True)
+        data.append({
+            "Name": r["name"],
+            "Ticker": r["ticker"],
+            "Signal": f"{r['symbol']} {r.get('ema_symbol', '')}",
+            "Sentiment": r["sentiment"],
+            "RSI": rsi_str,
+            "MACD": r["macd_signal"],
+            "Score": sentiment_score,  # For sorting
+            "_index": results.index(r)  # Store original index to reference back to results
+        })
     
-    with col2:
-        if st.button("View Charts", key=f"btn_{ticker}"):
-            st.session_state.selected_ticker = ticker
-            st.session_state.selected_result = result
+    return pd.DataFrame(data)
 
 def get_sentiment_category(sentiment):
     """Extract the main sentiment category from the detailed sentiment"""
-    if "BULLISH" in sentiment:
+    if "STRONGLY BULLISH" in sentiment:
+        return "STRONGLY BULLISH"
+    elif "BULLISH" in sentiment:
         return "BULLISH"
+    elif "STRONGLY BEARISH" in sentiment:  
+        return "STRONGLY BEARISH"
     elif "BEARISH" in sentiment:
         return "BEARISH"
     elif "CAUTIOUS" in sentiment:
         return "CAUTIOUS"
+    elif "TRENDING UP" in sentiment:
+        return "TRENDING UP"
+    elif "TRENDING DOWN" in sentiment:
+        return "TRENDING DOWN"
     else:
         return "NEUTRAL"
 
@@ -424,31 +450,47 @@ def display_market_summary(results):
         <h3>Market Sentiment Summary</h3>
         <p>Total tickers analyzed: {total_valid}</p>
         <p>Overall market tendency: <span class="{overall_class}">{overall}</span></p>
-        <div style="display: flex; justify-content: space-between; max-width: 500px;">
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); grid-gap: 10px; max-width: 800px;">
+            <div>
+                <div class="indicator" style="background-color: #00A100;"></div>
+                STRONGLY BULLISH: {sentiment_counts.get('STRONGLY BULLISH', 0)} ({sentiment_percentages.get('STRONGLY BULLISH', 0):.1f}%)
+            </div>
             <div>
                 <div class="indicator" style="background-color: #0ECB81;"></div>
                 BULLISH: {sentiment_counts.get('BULLISH', 0)} ({sentiment_percentages.get('BULLISH', 0):.1f}%)
+            </div>
+            <div>
+                <div class="indicator" style="background-color: #7BD9B0;"></div>
+                TRENDING UP: {sentiment_counts.get('TRENDING UP', 0)} ({sentiment_percentages.get('TRENDING UP', 0):.1f}%)
             </div>
             <div>
                 <div class="indicator" style="background-color: #F0B90B;"></div>
                 CAUTIOUS: {sentiment_counts.get('CAUTIOUS', 0)} ({sentiment_percentages.get('CAUTIOUS', 0):.1f}%)
             </div>
             <div>
+                <div class="indicator" style="background-color: #8A8A8A;"></div>
+                NEUTRAL: {sentiment_counts.get('NEUTRAL', 0)} ({sentiment_percentages.get('NEUTRAL', 0):.1f}%)
+            </div>
+            <div>
+                <div class="indicator" style="background-color: #FF9999;"></div>
+                TRENDING DOWN: {sentiment_counts.get('TRENDING DOWN', 0)} ({sentiment_percentages.get('TRENDING DOWN', 0):.1f}%)
+            </div>
+            <div>
                 <div class="indicator" style="background-color: #F6465D;"></div>
                 BEARISH: {sentiment_counts.get('BEARISH', 0)} ({sentiment_percentages.get('BEARISH', 0):.1f}%)
             </div>
             <div>
-                <div class="indicator" style="background-color: #8A8A8A;"></div>
-                NEUTRAL: {sentiment_counts.get('NEUTRAL', 0)} ({sentiment_percentages.get('NEUTRAL', 0):.1f}%)
+                <div class="indicator" style="background-color: #D20000;"></div>
+                STRONGLY BEARISH: {sentiment_counts.get('STRONGLY BEARISH', 0)} ({sentiment_percentages.get('STRONGLY BEARISH', 0):.1f}%)
             </div>
         </div>
     </div>
     """, unsafe_allow_html=True)
     
-    # Create pie chart
-    labels = ["BULLISH", "CAUTIOUS", "BEARISH", "NEUTRAL"]
+    # Create pie chart with more detailed categories
+    labels = ["STRONGLY BULLISH", "BULLISH", "TRENDING UP", "CAUTIOUS", "NEUTRAL", "TRENDING DOWN", "BEARISH", "STRONGLY BEARISH"]
     values = [sentiment_counts.get(label, 0) for label in labels]
-    colors = ['#0ECB81', '#F0B90B', '#F6465D', '#8A8A8A']
+    colors = ['#00A100', '#0ECB81', '#7BD9B0', '#F0B90B', '#8A8A8A', '#FF9999', '#F6465D', '#D20000']
     
     fig = go.Figure(data=[go.Pie(
         labels=labels,
@@ -470,6 +512,9 @@ def display_charts(result):
     if not result or not result["charts"] or result["error"]:
         st.error("No chart data available")
         return
+    
+    # Display name first, then ticker in parentheses
+    st.title(f"{result['name']} ({result['ticker']})")
     
     charts = result["charts"]
     price_data = charts["price"]
@@ -562,7 +607,7 @@ def display_charts(result):
     
     # Update layout
     fig.update_layout(
-        title=f"{result['ticker']} - {result['name']} Analysis",
+        title="Technical Chart Analysis",
         height=800,
         xaxis_rangeslider_visible=False,
         yaxis2=dict(range=[0, 100]),
@@ -797,16 +842,97 @@ def main():
             # Provide CSV export option
             st.markdown(export_to_csv(st.session_state.results), unsafe_allow_html=True)
             
-            # Display results by category
-            for category in TICKER_CATEGORIES.keys():
-                # Filter results for this category
-                category_results = [r for r in st.session_state.results 
-                                 if any(r["ticker"] == t for t in TICKER_CATEGORIES[category].keys())]
+            # Create a table for all results
+            st.subheader("All Analyzed Instruments")
+            
+            # Convert results to DataFrame for table display
+            df = create_results_dataframe(st.session_state.results)
+            
+            if not df.empty:
+                # Sort options
+                sort_options = {
+                    "Most Bullish First": {"column": "Score", "ascending": False},
+                    "Most Bearish First": {"column": "Score", "ascending": True},
+                    "Alphabetical (A-Z)": {"column": "Name", "ascending": True},
+                    "RSI (High to Low)": {"column": "RSI", "ascending": False},
+                }
                 
-                if category_results:
-                    with st.expander(f"{category} ({len(category_results)} tickers)", expanded=category=="INDICES"):
-                        for result in category_results:
-                            display_ticker_card(result)
+                sort_choice = st.selectbox(
+                    "Sort by:",
+                    options=list(sort_options.keys()),
+                    index=0
+                )
+                
+                # Apply sorting
+                sort_config = sort_options[sort_choice]
+                df = df.sort_values(by=sort_config["column"], ascending=sort_config["ascending"])
+                
+                # Drop the internal score column and index column before displaying
+                display_df = df.drop(columns=["Score", "_index"]).reset_index(drop=True)
+                
+                # Apply custom formatting to the table
+                st.markdown('<div class="dataframe-container">', unsafe_allow_html=True)
+                
+                # Display the table with click functionality
+                selected_indices = st.data_editor(
+                    display_df,
+                    hide_index=True,
+                    use_container_width=True,
+                    disabled=True,
+                    key="results_table",
+                    column_config={
+                        "Name": st.column_config.TextColumn(
+                            "Instrument Name",
+                            width="large",
+                            help="Full name of the instrument",
+                        ),
+                        "Ticker": st.column_config.TextColumn(
+                            "Symbol",
+                            width="small",
+                        ),
+                        "Signal": st.column_config.TextColumn(
+                            "Signal",
+                            width="small",
+                        ),
+                        "Sentiment": st.column_config.TextColumn(
+                            "Sentiment",
+                            width="medium",
+                        ),
+                        "RSI": st.column_config.TextColumn(
+                            "RSI",
+                            width="small",
+                        ),
+                        "MACD": st.column_config.TextColumn(
+                            "MACD Signal",
+                            width="medium",
+                        ),
+                    }
+                )
+                st.markdown('</div>', unsafe_allow_html=True)
+                
+                # Show detail view button for the currently selected row
+                if "selected_rows" in st.session_state:
+                    for row_index in st.session_state.selected_rows:
+                        original_index = df.iloc[row_index]["_index"]
+                        selected_result = st.session_state.results[original_index]
+                        st.session_state.selected_ticker = selected_result["ticker"]
+                        st.session_state.selected_result = selected_result
+                
+                # Interactive row selection
+                st.write("Click on any row to view detailed analysis")
+                col1, col2 = st.columns(2)
+                selected_ticker = col1.selectbox("Or select an instrument:", df["Name"].tolist())
+                if col2.button("View Analysis"):
+                    # Find the corresponding result
+                    name_match = df[df["Name"] == selected_ticker].iloc[0]
+                    index = int(name_match["_index"])
+                    st.session_state.selected_ticker = st.session_state.results[index]["ticker"]
+                    st.session_state.selected_result = st.session_state.results[index]
+                    # Switch to the Detailed Analysis tab
+                    st.experimental_rerun()
+            
+            else:
+                st.warning("No valid results available for display.")
     
     with tabs[1]:  # Detailed Analysis tab
         st.subheader("Detailed Technical Analysis")
