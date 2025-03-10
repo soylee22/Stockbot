@@ -1172,23 +1172,52 @@ def scan_ticker(ticker, display_name):
         weekly_rsi = calculate_rsi(weekly_data)
         emas = calculate_ema(daily_data)
 
+        # Check if RSI calculations returned valid data
+        if daily_rsi.empty or weekly_rsi.empty or daily_rsi.isna().all() or weekly_rsi.isna().all():
+            return {"display_name": display_name, "error": "Invalid RSI calculation", "score": -1000}
+
+        # Get latest values - ensure they exist before proceeding
+        try:
+            latest_daily_rsi = daily_rsi.iloc[-1]
+            latest_weekly_rsi = weekly_rsi.iloc[-1]
+            
+            # Only calculate signal line if we have valid RSI values
+            if not pd.isna(latest_daily_rsi):
+                # Calculate RSI signal line (9-period SMA of RSI)
+                daily_rsi_signal = calculate_rsi_signal(daily_rsi, period=9)
+                latest_rsi_signal = daily_rsi_signal.iloc[-1]
+                
+                # Handle potential NaN in signal line
+                if pd.isna(latest_rsi_signal):
+                    rsi_above_signal = False
+                    rsi_signal_status = "❌"
+                else:
+                    rsi_above_signal = latest_daily_rsi > latest_rsi_signal
+                    rsi_signal_status = "✅" if rsi_above_signal else "❌"
+            else:
+                # Default values if RSI is invalid
+                latest_rsi_signal = np.nan
+                rsi_above_signal = False
+                rsi_signal_status = "❌"
+        except (IndexError, KeyError) as e:
+            return {"display_name": display_name, "error": f"RSI data access error: {str(e)}", "score": -1000}
+        
         # Add MACD calculation here
         macd = calculate_macd(daily_data)
-        latest_macd_line = macd['macd_line'].iloc[-1]
-        latest_signal_line = macd['signal_line'].iloc[-1]
-        macd_above_zero = latest_macd_line > 0
-        macd_above_signal = latest_macd_line > latest_signal_line
-        macd_status = "✅" if macd_above_signal else "❌"
+        try:
+            latest_macd_line = macd['macd_line'].iloc[-1]
+            latest_signal_line = macd['signal_line'].iloc[-1]
+            macd_above_zero = latest_macd_line > 0
+            macd_above_signal = latest_macd_line > latest_signal_line
+            macd_status = "✅" if macd_above_signal else "❌"
+        except (IndexError, KeyError) as e:
+            # Handle MACD calculation errors
+            latest_macd_line = np.nan
+            latest_signal_line = np.nan
+            macd_above_zero = False
+            macd_above_signal = False
+            macd_status = "❌"
 
-        # Inside scan_ticker function
-        rsi_signal = calculate_rsi_signal(daily_rsi)
-        latest_rsi_signal = rsi_signal.iloc[-1]
-        rsi_above_signal = latest_daily_rsi > latest_rsi_signal
-        rsi_signal_status = "✅" if rsi_above_signal else "❌"
-        
-        # Get latest values
-        latest_daily_rsi = daily_rsi.iloc[-1]
-        latest_weekly_rsi = weekly_rsi.iloc[-1]
         ema_aligned = check_ema_alignment(emas)
         
         # Determine conditions
@@ -1199,7 +1228,6 @@ def scan_ticker(ticker, display_name):
         daily_status = "Bullish" if daily_bullish else "Bearish"
         weekly_status = "Bullish" if weekly_bullish else "Bearish"
         ema_status = "✅" if ema_aligned else "❌"
-        
         
         # Determine emoji
         if daily_bullish and weekly_bullish:
@@ -1221,8 +1249,10 @@ def scan_ticker(ticker, display_name):
         else:
             pct_change = 0
             
-        # Calculate bullish score for sorting
+        # Update bullish score calculation to include RSI signal
         bullish_score = calculate_bullish_score(latest_daily_rsi, latest_weekly_rsi, ema_aligned, macd_above_signal, pct_change)
+        if rsi_above_signal:
+            bullish_score += 5  # Add bonus points for RSI above signal line
         
         # Return result as dictionary for easier sorting
         return {
@@ -1233,8 +1263,10 @@ def scan_ticker(ticker, display_name):
             "weekly_status": weekly_status,
             "ema_status": ema_status,
             "macd_status": macd_status,
+            "rsi_signal_status": rsi_signal_status,
             "daily_rsi": latest_daily_rsi,
             "weekly_rsi": latest_weekly_rsi,
+            "rsi_signal": latest_rsi_signal,
             "price": current_price,
             "pct_change": pct_change,
             "score": bullish_score,
@@ -1251,7 +1283,7 @@ def scan_ticker(ticker, display_name):
             "error": str(e),
             "score": -1000
         }
-
+        
 def create_chart(result):
     """
     Create an interactive chart for a given ticker
