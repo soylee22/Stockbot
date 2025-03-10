@@ -1845,7 +1845,7 @@ def main():
                                     "Daily": r["daily_status"],
                                     "Weekly": r["weekly_status"],
                                     "EMA": r["ema_status"],
-                                    "MACD": r["macd_status"]
+                                    "MACD": r["macd_status"],
                                     "Price": f"{r['price']:.4f}",
                                     "Change %": f"{r['pct_change']:.2f}",
                                     "Daily RSI": f"{r['daily_rsi']:.0f}",
@@ -1909,7 +1909,7 @@ def main():
                                     "Daily": r["daily_status"],
                                     "Weekly": r["weekly_status"],
                                     "EMA": r["ema_status"],
-                                    "MACD": r["macd_status"]
+                                    "MACD": r["macd_status"],
                                     "Price": f"{r['price']:.4f}",
                                     "Change %": f"{r['pct_change']:.2f}",
                                     "Daily RSI": f"{r['daily_rsi']:.0f}",
@@ -1941,7 +1941,7 @@ def main():
                                     "Daily": r["daily_status"],
                                     "Weekly": r["weekly_status"],
                                     "EMA": r["ema_status"],
-                                    "MACD": r["macd_status"]
+                                    "MACD": r["macd_status"],
                                     "Price": f"{r['price']:.4f}",
                                     "Change %": f"{r['pct_change']:.2f}",
                                     "Daily RSI": f"{r['daily_rsi']:.0f}",
