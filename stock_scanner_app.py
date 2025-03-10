@@ -1106,6 +1106,23 @@ def calculate_ema(data, spans=[7, 11, 21]):
     for span in spans:
         emas[f'EMA_{span}'] = data['Close'].ewm(span=span, adjust=False).mean()
     return emas
+    
+def calculate_macd(data, fast_period=12, slow_period=26, signal_period=9):
+    """Calculate MACD (Moving Average Convergence Divergence)"""
+    # Calculate Fast and Slow EMA
+    ema_fast = data['Close'].ewm(span=fast_period, adjust=False).mean()
+    ema_slow = data['Close'].ewm(span=slow_period, adjust=False).mean()
+    
+    # Calculate MACD line and Signal line
+    macd_line = ema_fast - ema_slow
+    signal_line = macd_line.ewm(span=signal_period, adjust=False).mean()
+    histogram = macd_line - signal_line
+    
+    return {
+        'macd_line': macd_line,
+        'signal_line': signal_line,
+        'histogram': histogram
+    }
 
 def check_ema_alignment(emas):
     """
