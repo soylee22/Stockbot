@@ -1197,7 +1197,7 @@ def scan_ticker(ticker, display_name):
         return {
             "display_name": display_name,
             "ticker": ticker,
-            "emoji": emoji,"
+            "emoji": emoji,
             "daily_status": daily_status,
             "weekly_status": weekly_status,
             "ema_status": ema_status,
