@@ -1116,14 +1116,17 @@ def check_ema_alignment(emas):
     
     return emas['EMA_7'].iloc[-1] > emas['EMA_11'].iloc[-1] > emas['EMA_21'].iloc[-1]
 
-def calculate_bullish_score(daily_rsi, weekly_rsi, ema_aligned, pct_change):
+def calculate_bullish_score(daily_rsi, weekly_rsi, ema_aligned, macd_above_signal, pct_change):
     """
     Calculate a bullish score to sort results (higher is more bullish)
-    Pure RSI-based scoring to find the true top performers
+    Uses RSI and MACD for scoring
     """
-    # Very straightforward - just use the RSI values directly
     # Daily RSI is weighted 2x as it's more current
     score = daily_rsi * 2 + weekly_rsi
+    
+    # Add bonus points for good MACD signal
+    if macd_above_signal:
+        score += 10  # Bonus for positive MACD
     
     return score
 
@@ -1143,6 +1146,14 @@ def scan_ticker(ticker, display_name):
         daily_rsi = calculate_rsi(daily_data)
         weekly_rsi = calculate_rsi(weekly_data)
         emas = calculate_ema(daily_data)
+
+        # Add MACD calculation here
+        macd = calculate_macd(daily_data)
+        latest_macd_line = macd['macd_line'].iloc[-1]
+        latest_signal_line = macd['signal_line'].iloc[-1]
+        macd_above_zero = latest_macd_line > 0
+        macd_above_signal = latest_macd_line > latest_signal_line
+        macd_status = "✅" if macd_above_signal else "❌"
         
         # Get latest values
         latest_daily_rsi = daily_rsi.iloc[-1]
@@ -1157,6 +1168,7 @@ def scan_ticker(ticker, display_name):
         daily_status = "Bullish" if daily_bullish else "Bearish"
         weekly_status = "Bullish" if weekly_bullish else "Bearish"
         ema_status = "✅" if ema_aligned else "❌"
+        
         
         # Determine emoji
         if daily_bullish and weekly_bullish:
@@ -1179,16 +1191,17 @@ def scan_ticker(ticker, display_name):
             pct_change = 0
             
         # Calculate bullish score for sorting
-        bullish_score = calculate_bullish_score(latest_daily_rsi, latest_weekly_rsi, ema_aligned, pct_change)
+        bullish_score = calculate_bullish_score(latest_daily_rsi, latest_weekly_rsi, ema_aligned, macd_above_signal, pct_change)
         
         # Return result as dictionary for easier sorting
         return {
             "display_name": display_name,
             "ticker": ticker,
-            "emoji": emoji,
+            "emoji": emoji,"
             "daily_status": daily_status,
             "weekly_status": weekly_status,
             "ema_status": ema_status,
+            "macd_status": macd_status,
             "daily_rsi": latest_daily_rsi,
             "weekly_rsi": latest_weekly_rsi,
             "price": current_price,
@@ -1739,6 +1752,7 @@ def main():
                                 "Daily": r["daily_status"],
                                 "Weekly": r["weekly_status"],
                                 "EMA": r["ema_status"],
+                                "MACD": r["macd_status"],
                                 "Price": f"{r['price']:.4f}",
                                 "Change %": f"{r['pct_change']:.2f}",
                                 "Daily RSI": f"{r['daily_rsi']:.0f}",
