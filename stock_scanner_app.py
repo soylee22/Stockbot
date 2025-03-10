@@ -1052,6 +1052,14 @@ def fetch_stock_data(ticker, period="6mo", interval="1d"):
         st.error(f"Error fetching data for {ticker}: {e}")
         return pd.DataFrame()
 
+def calculate_rsi_signal(rsi_series, period=14):
+    """Calculate a signal line (SMA) for RSI"""
+    if len(rsi_series.dropna()) < period:
+        return pd.Series([np.nan] * len(rsi_series))
+    
+    signal_line = rsi_series.rolling(window=period).mean()
+    return signal_line
+
 def calculate_rsi(data, window=14):
     """
     Calculate RSI (Relative Strength Index) using the standard method
@@ -1171,6 +1179,12 @@ def scan_ticker(ticker, display_name):
         macd_above_zero = latest_macd_line > 0
         macd_above_signal = latest_macd_line > latest_signal_line
         macd_status = "✅" if macd_above_signal else "❌"
+
+        # Inside scan_ticker function
+        rsi_signal = calculate_rsi_signal(daily_rsi)
+        latest_rsi_signal = rsi_signal.iloc[-1]
+        rsi_above_signal = latest_daily_rsi > latest_rsi_signal
+        rsi_signal_status = "✅" if rsi_above_signal else "❌"
         
         # Get latest values
         latest_daily_rsi = daily_rsi.iloc[-1]
@@ -1770,6 +1784,7 @@ def main():
                                 "Weekly": r["weekly_status"],
                                 "EMA": r["ema_status"],
                                 "MACD": r["macd_status"],
+                                "RSI Sig": r["rsi_signal_status"],  #
                                 "Price": f"{r['price']:.4f}",
                                 "Change %": f"{r['pct_change']:.2f}",
                                 "Daily RSI": f"{r['daily_rsi']:.0f}",
@@ -1804,6 +1819,7 @@ def main():
                                     "Weekly": r["weekly_status"],
                                     "EMA": r["ema_status"],
                                     "MACD": r["macd_status"],
+                                    "RSI Sig": r["rsi_signal_status"],  #
                                     "Price": f"{r['price']:.4f}",
                                     "Change %": f"{r['pct_change']:.2f}",
                                     "Daily RSI": f"{r['daily_rsi']:.0f}",
@@ -1846,6 +1862,7 @@ def main():
                                     "Weekly": r["weekly_status"],
                                     "EMA": r["ema_status"],
                                     "MACD": r["macd_status"],
+                                    "RSI Sig": r["rsi_signal_status"],  #
                                     "Price": f"{r['price']:.4f}",
                                     "Change %": f"{r['pct_change']:.2f}",
                                     "Daily RSI": f"{r['daily_rsi']:.0f}",
@@ -1878,6 +1895,7 @@ def main():
                                     "Weekly": r["weekly_status"],
                                     "EMA": r["ema_status"],
                                     "MACD": r["macd_status"],
+                                    "RSI Sig": r["rsi_signal_status"],  #
                                     "Price": f"{r['price']:.4f}",
                                     "Change %": f"{r['pct_change']:.2f}",
                                     "Daily RSI": f"{r['daily_rsi']:.0f}",
@@ -1910,6 +1928,7 @@ def main():
                                     "Weekly": r["weekly_status"],
                                     "EMA": r["ema_status"],
                                     "MACD": r["macd_status"],
+                                    "RSI Sig": r["rsi_signal_status"],  #
                                     "Price": f"{r['price']:.4f}",
                                     "Change %": f"{r['pct_change']:.2f}",
                                     "Daily RSI": f"{r['daily_rsi']:.0f}",
@@ -1942,6 +1961,7 @@ def main():
                                     "Weekly": r["weekly_status"],
                                     "EMA": r["ema_status"],
                                     "MACD": r["macd_status"],
+                                    "RSI Sig": r["rsi_signal_status"],  #
                                     "Price": f"{r['price']:.4f}",
                                     "Change %": f"{r['pct_change']:.2f}",
                                     "Daily RSI": f"{r['daily_rsi']:.0f}",
