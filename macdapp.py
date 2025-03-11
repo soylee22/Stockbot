@@ -707,7 +707,40 @@ def display_charts(result):
                             mode='markers',
                             marker=dict(symbol='triangle-up', size=12, color='green'),
                             name='Golden Cross'
-                        )
+                        ),
+                        row=2, col=1
+                    )
+                
+                # Death crosses
+                death_cross_indices = monthly_price_data.index[cross_points == -1]
+                if len(death_cross_indices) > 0:
+                    death_cross_values = [0] * len(death_cross_indices)  # y-values for markers
+                    fig2.add_trace(
+                        go.Scatter(
+                            x=death_cross_indices,
+                            y=death_cross_values,
+                            mode='markers',
+                            marker=dict(symbol='triangle-down', size=12, color='red'),
+                            name='Death Cross'
+                        ),
+                        row=2, col=1
+                    )
+                
+                # Highlight the most recent cross
+                if result.get("cross_date"):
+                    cross_date = result.get("cross_date")
+                    cross_type = "Golden Cross" if "GOLDEN CROSS" in result.get("macd_signal", "") else "Death Cross"
+                    fig2.add_annotation(
+                        x=0.5, y=1.05,
+                        xref="paper", yref="paper",
+                        text=f"Most Recent {cross_type}: {cross_date}",
+                        showarrow=False,
+                        font=dict(color="black", size=14),
+                        bgcolor="#f9f9f9",
+                        bordercolor="#c7c7c7",
+                        borderwidth=1,
+                        borderpad=4
+                    )
             
             # Update layout for monthly chart
             fig2.update_layout(
@@ -756,6 +789,32 @@ def display_charts(result):
                 <span class="symbol">{result["symbol"]}</span>
                 <span class="{sentiment_class}">{result["sentiment"]}</span>
             </p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        rsi_level = "OVERBOUGHT" if result["rsi"] > 70 else "OVERSOLD" if result["rsi"] < 30 else "NEUTRAL"
+        rsi_class = "bearish" if rsi_level == "OVERBOUGHT" else "bullish" if rsi_level == "OVERSOLD" else "neutral"
+        
+        st.markdown(f"""
+        <div style="padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+            <h4>RSI Analysis (Daily)</h4>
+            <p>Current RSI: {result["rsi"]:.2f}</p>
+            <p>Level: <span class="{rsi_class}">{rsi_level}</span></p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        macd_class = "bullish" if "GOLDEN CROSS" in result["macd_signal"] else "bearish" if "DEATH CROSS" in result["macd_signal"] else "neutral"
+        current_status = result.get("current_macd_status")
+        current_status_class = "bullish" if current_status == "BULLISH" else "bearish" if current_status == "BEARISH" else ""
+        
+        st.markdown(f"""
+        <div style="padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+            <h4>MACD Signal (Monthly)</h4>
+            <p class="{macd_class}">{result["macd_signal"]}</p>
+            <p>Current Status: <span class="{current_status_class}">{current_status or 'UNKNOWN'}</span></p>
+            <p>EMA Alignment (Daily): {result["ema_symbol"]}</p>
         </div>
         """, unsafe_allow_html=True)
 
