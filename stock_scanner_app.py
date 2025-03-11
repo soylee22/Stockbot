@@ -1062,7 +1062,10 @@ def calculate_rsi_signal(rsi_series, period=14):
     
     signal_line = rsi_series.rolling(window=period).mean()
     return signal_line
+    
 def detect_macd_cross_monthly(ticker):
+    """
+    Detecdef detect_macd_cross_monthly(ticker):
     """
     Detect the most recent MACD golden cross or death cross on monthly timeframe
     A golden cross occurs when the MACD line crosses above the signal line
@@ -1074,33 +1077,44 @@ def detect_macd_cross_monthly(ticker):
         # Fetch monthly data
         monthly_data = fetch_stock_data(ticker, period="5y", interval="1mo")
         
-        if monthly_data.empty or len(monthly_data) < 30:
-            return "Insufficient Data", None
+        if monthly_data.empty or len(monthly_data) < 26:  # Need at least 26 periods for MACD
+            return "No MACD Cross", None
         
         # Calculate MACD for monthly data
-        macd_monthly = calculate_macd(monthly_data)
+        macd_monthly = calculate_macd(monthly_data, fast_period=12, slow_period=26, signal_period=9)
         macd_line = macd_monthly['macd_line']
         signal_line = macd_monthly['signal_line']
         
-        # Drop NaN values
-        valid_idx = signal_line.dropna().index
-        if len(valid_idx) < 2:
-            return "Insufficient Data", None
+        # Remove NaN values more safely
+        valid_data = pd.DataFrame({
+            'macd': macd_line,
+            'signal': signal_line
+        }).dropna()
+        
+        if len(valid_data) < 2:  # Need at least 2 points to detect a cross
+            return "No MACD Cross", None
+        
+        # Create series for checking crosses
+        macd_valid = valid_data['macd']
+        signal_valid = valid_data['signal']
+        
+        # Find all crossover points
+        golden_crosses = []
+        death_crosses = []
+        
+        for i in range(1, len(valid_data)):
+            # Check for golden cross (MACD crosses above signal)
+            if macd_valid.iloc[i-1] <= signal_valid.iloc[i-1] and macd_valid.iloc[i] > signal_valid.iloc[i]:
+                golden_crosses.append(macd_valid.index[i])
             
-        macd_line = macd_line[valid_idx]
-        signal_line = signal_line[valid_idx]
-        
-        # Find crossover points
-        # Golden Cross: MACD crosses above Signal
-        # Death Cross: MACD crosses below Signal
-        golden_cross = (macd_line.shift(1) < signal_line.shift(1)) & (macd_line > signal_line)
-        death_cross = (macd_line.shift(1) > signal_line.shift(1)) & (macd_line < signal_line)
-        
-        # Get the most recent cross
-        last_golden_cross = golden_cross[golden_cross].index.max() if any(golden_cross) else None
-        last_death_cross = death_cross[death_cross].index.max() if any(death_cross) else None
+            # Check for death cross (MACD crosses below signal)
+            if macd_valid.iloc[i-1] >= signal_valid.iloc[i-1] and macd_valid.iloc[i] < signal_valid.iloc[i]:
+                death_crosses.append(macd_valid.index[i])
         
         # Determine the most recent cross
+        last_golden_cross = max(golden_crosses) if golden_crosses else None
+        last_death_cross = max(death_crosses) if death_crosses else None
+        
         if last_golden_cross is not None and last_death_cross is not None:
             if last_golden_cross > last_death_cross:
                 return "MACD Golden Cross", last_golden_cross
@@ -1108,13 +1122,7 @@ def detect_macd_cross_monthly(ticker):
                 return "MACD Death Cross", last_death_cross
         elif last_golden_cross is not None:
             return "MACD Golden Cross", last_golden_cross
-        elif last_death_cross is not None:
-            return "MACD Death Cross", last_death_cross
-        else:
-            return "No MACD Cross", None
-    
-    except Exception as e:
-        return f"Error: {str(e)}", None
+        elif last_death_cross is not No
 
 def calculate_rsi(data, window=14):
     """
