@@ -127,70 +127,66 @@ def calculate_rsi(data, window=14):
     latest_rsi = rsi.iloc[-1]
     return rsi, latest_rsi
 
-def calculate_macd(data):
-    """Calculate MACD and detect crosses"""
-    if data is None:
-        return None, None, None
+def calculate_monthly_macd(ticker):
+    """Calculate MACD on monthly data and find the most recent cross"""
+    try:
+        # Fetch monthly data going back much further to ensure we find a cross
+        ticker_obj = yf.Ticker(ticker)
+        monthly_data = ticker_obj.history(period="10y", interval="1mo")
         
-    # Need at least 35 days for the MACD (26 for longest EMA + 9 for signal line)
-    if len(data) < 35:
-        st.warning(f"Only {len(data)} days of data available, need at least 35 for MACD calculation")
-        return None, None, None
-    
-    # Calculate EMAs
-    ema12 = data['Close'].ewm(span=12, adjust=False).mean()
-    ema26 = data['Close'].ewm(span=26, adjust=False).mean()
-    
-    # Calculate MACD line and signal line
-    macd_line = ema12 - ema26
-    signal_line = macd_line.ewm(span=9, adjust=False).mean()
-    
-    # Check for crosses in the recent data
-    last_n_days = min(10, len(data))
-    for i in range(1, last_n_days):
-        # Check for golden cross (MACD crosses above signal line)
-        if macd_line.iloc[-i] > signal_line.iloc[-i] and macd_line.iloc[-(i+1)] <= signal_line.iloc[-(i+1)]:
-            return macd_line, signal_line, "GOLDEN CROSS"
+        if monthly_data.empty or len(monthly_data) < 35:
+            return None, None, "Insufficient monthly data", None
         
-        # Check for death cross (MACD crosses below signal line)
-        if macd_line.iloc[-i] < signal_line.iloc[-i] and macd_line.iloc[-(i+1)] >= signal_line.iloc[-(i+1)]:
-            return macd_line, signal_line, "DEATH CROSS"
-    
-    # No cross detected
-    return macd_line, signal_line, "NO STRONG SIGNAL"
-
-def determine_market_sentiment(rsi, macd_signal):
-    """Determine market sentiment based on RSI and MACD signals"""
-    # Handle error conditions first
-    if rsi is None or macd_signal is None or macd_signal in ["Insufficient data", "Calculation Error"]:
-        return "UNKNOWN", "❓", 0
+        # Calculate EMAs
+        ema12 = monthly_data['Close'].ewm(span=12, adjust=False).mean()
+        ema26 = monthly_data['Close'].ewm(span=26, adjust=False).mean()
         
-    # Create a base score for ranking (higher = more bullish)
-    score = 50  # Neutral starting point
-    
-    # Now determine sentiment based on valid signals
-    if macd_signal == "GOLDEN CROSS" and rsi >= 50:
-        if rsi >= 70:  # Strong bullish momentum
-            return "STRONGLY BULLISH", "🚀🚀", 100
-        return "BULLISH", "🚀🚀", 80
-    elif macd_signal == "GOLDEN CROSS" and rsi < 50:
-        return "CAUTIOUS (Bullish MACD, Weak RSI)", "🕣🕣", 60
-    elif macd_signal == "DEATH CROSS" and rsi < 50:
-        if rsi <= 30:  # Strong bearish momentum
-            return "STRONGLY BEARISH", "💀💀", 0
-        return "BEARISH", "💀💀", 20
-    elif macd_signal == "DEATH CROSS" and rsi >= 50:
-        return "CAUTIOUS (Bearish MACD, Strong RSI)", "⚠️⚠️", 40
-    else:
-        # No strong MACD signal but we can still use RSI for direction
-        if rsi >= 70:
-            return "TRENDING UP (Strong RSI)", "↗️", 70
-        elif rsi <= 30:
-            return "TRENDING DOWN (Weak RSI)", "↘️", 30
-        elif rsi > 50:
-            return "NEUTRAL (Slight Bullish Bias)", "➡️", 55
+        # Calculate MACD line and signal line
+        macd_line = ema12 - ema26
+        signal_line = macd_line.ewm(span=9, adjust=False).mean()
+        
+        # Determine the current status
+        current_status = "BULLISH" if macd_line.iloc[-1] > signal_line.iloc[-1] else "BEARISH"
+        
+        # Look for the most recent cross - search through all available data
+        macd_signal = None
+        months_since_cross = None
+        cross_date = None
+        
+        # Create a cross signal column
+        cross_signal = (macd_line > signal_line).astype(int)
+        # Find where the signal changes
+        cross_points = cross_signal.diff().fillna(0)
+        
+        # Get the most recent cross
+        most_recent_cross_idx = None
+        for i in range(1, len(cross_points)):
+            if cross_points.iloc[-i] != 0:
+                most_recent_cross_idx = len(cross_points) - i
+                break
+        
+        if most_recent_cross_idx is not None:
+            cross_date = monthly_data.index[most_recent_cross_idx].strftime('%Y-%m-%d')
+            months_since_cross = len(monthly_data) - 1 - most_recent_cross_idx
+            
+            # Determine if it was a golden or death cross
+            if cross_points.iloc[most_recent_cross_idx] > 0:
+                macd_signal = f"GOLDEN CROSS (MONTHLY)"
+            else:
+                macd_signal = f"DEATH CROSS (MONTHLY)"
         else:
-            return "NEUTRAL (Slight Bearish Bias)", "➡️", 45
+            # If no cross found
+            macd_signal = f"NO CROSS FOUND (Current: {current_status})"
+        
+        return macd_line, signal_line, macd_signal, {
+            "cross_date": cross_date,
+            "months_since_cross": months_since_cross,
+            "current_status": current_status
+        }
+        
+    except Exception as e:
+        print(f"Error calculating monthly MACD for {ticker}: {e}")
+        return None, None, "Calculation Error", None
 
 def check_ema_alignment(data):
     """Check if EMAs are aligned (7 > 11 > 21) on daily timeframe"""
@@ -213,8 +209,8 @@ def analyze_ticker(ticker, name):
     try:
         # Fetch data
         with st.spinner(f"Analyzing {ticker}..."):
-            data, yahoo_indicators = fetch_data(ticker)
-            if data is None or len(data) == 0:
+            daily_data, monthly_data, yahoo_indicators = fetch_data(ticker)
+            if daily_data is None or len(daily_data) == 0:
                 return {
                     "ticker": ticker,
                     "name": name,
@@ -232,11 +228,11 @@ def analyze_ticker(ticker, name):
             rsi_from_yahoo = yahoo_indicators.get('rsi') if yahoo_indicators else None
             
             if rsi_from_yahoo is not None:
-                rsi_series = pd.Series([rsi_from_yahoo] * len(data.index), index=data.index)
+                rsi_series = pd.Series([rsi_from_yahoo] * len(daily_data.index), index=daily_data.index)
                 latest_rsi = rsi_from_yahoo
             else:
                 # Fall back to calculation
-                rsi_series, latest_rsi = calculate_rsi(data)
+                rsi_series, latest_rsi = calculate_rsi(daily_data)
             
             if latest_rsi is None:
                 return {
@@ -248,54 +244,19 @@ def analyze_ticker(ticker, name):
                     "symbol": "❓",
                     "ema_aligned": False,
                     "error": "Insufficient data for RSI calculation",
-                    "data": data,
+                    "data": daily_data,
                     "charts": None
                 }
             
-            # Calculate MACD and detect cross (we'll always calculate this ourselves)
-            try:
-                # Calculate EMAs
-                ema12 = data['Close'].ewm(span=12, adjust=False).mean()
-                ema26 = data['Close'].ewm(span=26, adjust=False).mean()
-                
-                # Calculate MACD line and signal line
-                macd_line = ema12 - ema26
-                signal_line = macd_line.ewm(span=9, adjust=False).mean()
-                
-                # Check for crosses in the recent data
-                macd_signal = "NO STRONG SIGNAL"
-                days_since_cross = None
-                cross_date = None
-                last_n_days = min(10, len(data))
-                
-                for i in range(1, last_n_days):
-                    # Check for golden cross (MACD crosses above signal line)
-                    if (macd_line.iloc[-i] > signal_line.iloc[-i]) & (macd_line.iloc[-(i+1)] <= signal_line.iloc[-(i+1)]):
-                        macd_signal = "GOLDEN CROSS"
-                        days_since_cross = i - 1  # -1 because index 0 is today
-                        cross_date = data.index[-i].strftime('%Y-%m-%d')
-                        break
-                    
-                    # Check for death cross (MACD crosses below signal line)
-                    if (macd_line.iloc[-i] < signal_line.iloc[-i]) & (macd_line.iloc[-(i+1)] >= signal_line.iloc[-(i+1)]):
-                        macd_signal = "DEATH CROSS"
-                        days_since_cross = i - 1  # -1 because index 0 is today
-                        cross_date = data.index[-i].strftime('%Y-%m-%d')
-                        break
-            except Exception as e:
-                st.warning(f"MACD calculation error for {ticker}: {e}")
-                macd_line = None
-                signal_line = None
-                macd_signal = "Calculation Error"
-                days_since_cross = None
-                cross_date = None
+            # Calculate Monthly MACD with separate function
+            macd_line, signal_line, macd_signal, cross_info = calculate_monthly_macd(ticker)
             
-            # Check EMA alignment
+            # Check EMA alignment (daily data)
             try:
                 # Calculate EMAs
-                ema7 = data['Close'].ewm(span=7, adjust=False).mean()
-                ema11 = data['Close'].ewm(span=11, adjust=False).mean()
-                ema21 = data['Close'].ewm(span=21, adjust=False).mean()
+                ema7 = daily_data['Close'].ewm(span=7, adjust=False).mean()
+                ema11 = daily_data['Close'].ewm(span=11, adjust=False).mean()
+                ema21 = daily_data['Close'].ewm(span=21, adjust=False).mean()
                 
                 # Check if aligned (7 > 11 > 21)
                 if (ema7.iloc[-1] > ema11.iloc[-1]) & (ema11.iloc[-1] > ema21.iloc[-1]):
@@ -310,14 +271,16 @@ def analyze_ticker(ticker, name):
                 ema_lines = None
             
             # Determine market sentiment
-            sentiment, symbol, sentiment_score = determine_market_sentiment(latest_rsi, macd_signal)
+            sentiment, symbol, sentiment_score = determine_market_sentiment(latest_rsi, macd_signal, 
+                                                  cross_info.get("current_status") if cross_info else None)
             
             # Add EMA symbol
             ema_symbol = "✅" if ema_aligned else "❌"
             
             # Create charts data
             charts = {
-                "price": data,
+                "price": daily_data,
+                "monthly_price": monthly_data,
                 "rsi": rsi_series,
                 "macd_line": macd_line,
                 "signal_line": signal_line,
@@ -329,15 +292,17 @@ def analyze_ticker(ticker, name):
                 "name": name,
                 "rsi": latest_rsi,
                 "macd_signal": macd_signal,
-                "days_since_cross": days_since_cross,
-                "cross_date": cross_date,
+                "months_since_cross": cross_info.get("months_since_cross") if cross_info else None,
+                "cross_date": cross_info.get("cross_date") if cross_info else None,
                 "sentiment": sentiment,
                 "sentiment_score": sentiment_score,
                 "symbol": symbol,
                 "ema_aligned": ema_aligned,
                 "ema_symbol": ema_symbol,
+                "current_macd_status": cross_info.get("current_status") if cross_info else None,
                 "error": None,
-                "data": data,
+                "data": daily_data,
+                "monthly_data": monthly_data,
                 "charts": charts
             }
     
@@ -355,6 +320,50 @@ def analyze_ticker(ticker, name):
             "data": None,
             "charts": None
         }
+
+def determine_market_sentiment(rsi, macd_signal, current_macd_status=None):
+    """Determine market sentiment based on RSI and MACD signals"""
+    # Handle error conditions first
+    if rsi is None or macd_signal is None or macd_signal in ["Insufficient data", "Calculation Error", "Insufficient monthly data"]:
+        return "UNKNOWN", "❓", 0
+    
+    # Create a base score for ranking (higher = more bullish)
+    score = 50  # Neutral starting point
+    
+    # Check current MACD status first (above or below signal line)
+    is_currently_bullish = current_macd_status == "BULLISH"
+    
+    # Now determine sentiment based on valid signals
+    if "GOLDEN CROSS" in macd_signal and is_currently_bullish:
+        if rsi >= 70:  # Strong bullish momentum
+            return "STRONGLY BULLISH", "🚀🚀", 100
+        elif rsi >= 60:
+            return "BULLISH", "🚀", 80
+        else:
+            return "MODERATELY BULLISH", "↗️↗️", 70
+    elif "GOLDEN CROSS" in macd_signal and not is_currently_bullish:
+        # We had a golden cross but now MACD is below signal - weakening
+        return "WEAKENING (Past Golden Cross)", "↗️➡️", 60
+    elif "DEATH CROSS" in macd_signal and not is_currently_bullish:
+        if rsi <= 30:  # Strong bearish momentum
+            return "STRONGLY BEARISH", "💀💀", 0
+        elif rsi <= 40:
+            return "BEARISH", "💀", 20
+        else:
+            return "MODERATELY BEARISH", "↘️↘️", 30
+    elif "DEATH CROSS" in macd_signal and is_currently_bullish:
+        # We had a death cross but now MACD is above signal - recovering
+        return "RECOVERING (Past Death Cross)", "↘️➡️", 40
+    else:
+        # No cross signal or unclear
+        if rsi >= 70:
+            return "TRENDING UP (Strong RSI)", "↗️", 70
+        elif rsi <= 30:
+            return "TRENDING DOWN (Weak RSI)", "↘️", 30
+        elif rsi > 50:
+            return "NEUTRAL (Slight Bullish Bias)", "➡️", 55
+        else:
+            return "NEUTRAL (Slight Bearish Bias)", "➡️", 45
 
 def get_sentiment_class(sentiment):
     """Get CSS class for sentiment"""
@@ -387,32 +396,28 @@ def create_results_dataframe(results):
         # Format RSI value
         rsi_str = f"{r['rsi']:.2f}" if r['rsi'] is not None else "N/A"
         
-        # Format signal with days since cross
+        # Format signal with months since cross
         signal_text = r["macd_signal"]
-        days_since_cross = r.get("days_since_cross")
-        if days_since_cross is not None and ("GOLDEN CROSS" in signal_text or "DEATH CROSS" in signal_text):
-            # If the cross is recent, provide more context
-            if days_since_cross == 0:
+        months_since_cross = r.get("months_since_cross")
+        
+        if months_since_cross is not None and ("GOLDEN CROSS" in signal_text or "DEATH CROSS" in signal_text):
+            if months_since_cross == 0:
                 cross_when = "This month"
-            elif days_since_cross == 1:
+            elif months_since_cross == 1:
                 cross_when = "Last month"
             else:
-                cross_when = f"{days_since_cross} months ago"
+                cross_when = f"{months_since_cross} months ago"
                 
-            # If it's a monthly cross, we want to indicate timing in terms of months
-            if "(MONTHLY)" in signal_text:
-                signal_text = f"{signal_text} ({cross_when})"
-            else:
-                # For any daily signals (which should no longer happen with the changes)
-                if days_since_cross == 0:
-                    cross_when = "Today"
-                elif days_since_cross == 1:
-                    cross_when = "Yesterday"
-                else:
-                    cross_when = f"{days_since_cross} days ago"
-                signal_text = f"{signal_text} ({cross_when})"
+            signal_text = f"{signal_text} ({cross_when})"
+            
+            # Add current status
+            current_status = r.get("current_macd_status")
+            if current_status:
+                if ("GOLDEN CROSS" in signal_text and current_status == "BEARISH") or \
+                   ("DEATH CROSS" in signal_text and current_status == "BULLISH"):
+                    signal_text += f" - Now {current_status}"
         
-        # Get the sentiment score (added as third return value to determine_market_sentiment)
+        # Get the sentiment score
         sentiment_score = r.get("sentiment_score", 50)  # Default to neutral if not available
         
         data.append({
@@ -433,13 +438,13 @@ def get_sentiment_category(sentiment):
     """Extract the main sentiment category from the detailed sentiment"""
     if "STRONGLY BULLISH" in sentiment:
         return "STRONGLY BULLISH"
-    elif "BULLISH" in sentiment:
+    elif "BULLISH" in sentiment or "MODERATELY BULLISH" in sentiment:
         return "BULLISH"
     elif "STRONGLY BEARISH" in sentiment:  
         return "STRONGLY BEARISH"
-    elif "BEARISH" in sentiment:
+    elif "BEARISH" in sentiment or "MODERATELY BEARISH" in sentiment:
         return "BEARISH"
-    elif "CAUTIOUS" in sentiment:
+    elif "CAUTIOUS" in sentiment or "WEAKENING" in sentiment or "RECOVERING" in sentiment:
         return "CAUTIOUS"
     elif "TRENDING UP" in sentiment:
         return "TRENDING UP"
@@ -557,105 +562,185 @@ def display_charts(result):
     
     charts = result["charts"]
     price_data = charts["price"]
+    monthly_price_data = charts.get("monthly_price")
     rsi_data = charts["rsi"]
     macd_line = charts["macd_line"]
     signal_line = charts["signal_line"]
     ema_lines = charts["ema_lines"]
     
-    # Create figure with subplots
-    fig = make_subplots(
-        rows=3, 
-        cols=1,
-        shared_xaxes=True,
-        vertical_spacing=0.05,
-        row_heights=[0.5, 0.25, 0.25],
-        subplot_titles=("Price with EMAs", "RSI", "MACD")
-    )
+    # Create tabs for daily and monthly charts
+    daily_tab, monthly_tab = st.tabs(["Daily Timeframe", "Monthly Timeframe"])
     
-    # Add price candlestick chart
-    fig.add_trace(
-        go.Candlestick(
-            x=price_data.index,
-            open=price_data['Open'],
-            high=price_data['High'],
-            low=price_data['Low'],
-            close=price_data['Close'],
-            name="Price"
-        ),
-        row=1, col=1
-    )
-    
-    # Add EMAs to price chart
-    if ema_lines:
-        ema7, ema11, ema21 = ema_lines
-        fig.add_trace(
-            go.Scatter(x=price_data.index, y=ema7, name="EMA 7", line=dict(color="purple", width=1)),
-            row=1, col=1
-        )
-        fig.add_trace(
-            go.Scatter(x=price_data.index, y=ema11, name="EMA 11", line=dict(color="blue", width=1)),
-            row=1, col=1
-        )
-        fig.add_trace(
-            go.Scatter(x=price_data.index, y=ema21, name="EMA 21", line=dict(color="green", width=1)),
-            row=1, col=1
-        )
-    
-    # Add RSI
-    if rsi_data is not None:
-        fig.add_trace(
-            go.Scatter(x=price_data.index, y=rsi_data, name="RSI", line=dict(color="orange", width=1)),
-            row=2, col=1
+    with daily_tab:
+        # Create figure with subplots for daily data
+        fig = make_subplots(
+            rows=2, 
+            cols=1,
+            shared_xaxes=True,
+            vertical_spacing=0.05,
+            row_heights=[0.7, 0.3],
+            subplot_titles=("Price with EMAs", "RSI")
         )
         
-        # Add RSI reference lines
-        fig.add_shape(
-            type="line", line=dict(dash="dash", width=1, color="red"),
-            x0=price_data.index[0], x1=price_data.index[-1], y0=70, y1=70,
-            row=2, col=1
-        )
-        fig.add_shape(
-            type="line", line=dict(dash="dash", width=1, color="green"),
-            x0=price_data.index[0], x1=price_data.index[-1], y0=30, y1=30,
-            row=2, col=1
-        )
-        fig.add_shape(
-            type="line", line=dict(dash="dot", width=0.5, color="gray"),
-            x0=price_data.index[0], x1=price_data.index[-1], y0=50, y1=50,
-            row=2, col=1
-        )
-    
-    # Add MACD
-    if macd_line is not None and signal_line is not None:
+        # Add price candlestick chart
         fig.add_trace(
-            go.Scatter(x=price_data.index, y=macd_line, name="MACD", line=dict(color="blue", width=1)),
-            row=3, col=1
-        )
-        fig.add_trace(
-            go.Scatter(x=price_data.index, y=signal_line, name="Signal", line=dict(color="red", width=1)),
-            row=3, col=1
+            go.Candlestick(
+                x=price_data.index,
+                open=price_data['Open'],
+                high=price_data['High'],
+                low=price_data['Low'],
+                close=price_data['Close'],
+                name="Price"
+            ),
+            row=1, col=1
         )
         
-        # Add MACD histogram
-        histogram = macd_line - signal_line
-        colors = ['green' if val >= 0 else 'red' for val in histogram]
-        fig.add_trace(
-            go.Bar(x=price_data.index, y=histogram, name="Histogram", marker_color=colors),
-            row=3, col=1
+        # Add EMAs to price chart
+        if ema_lines:
+            ema7, ema11, ema21 = ema_lines
+            fig.add_trace(
+                go.Scatter(x=price_data.index, y=ema7, name="EMA 7", line=dict(color="purple", width=1)),
+                row=1, col=1
+            )
+            fig.add_trace(
+                go.Scatter(x=price_data.index, y=ema11, name="EMA 11", line=dict(color="blue", width=1)),
+                row=1, col=1
+            )
+            fig.add_trace(
+                go.Scatter(x=price_data.index, y=ema21, name="EMA 21", line=dict(color="green", width=1)),
+                row=1, col=1
+            )
+        
+        # Add RSI
+        if rsi_data is not None:
+            fig.add_trace(
+                go.Scatter(x=price_data.index, y=rsi_data, name="RSI", line=dict(color="orange", width=1)),
+                row=2, col=1
+            )
+            
+            # Add RSI reference lines
+            fig.add_shape(
+                type="line", line=dict(dash="dash", width=1, color="red"),
+                x0=price_data.index[0], x1=price_data.index[-1], y0=70, y1=70,
+                row=2, col=1
+            )
+            fig.add_shape(
+                type="line", line=dict(dash="dash", width=1, color="green"),
+                x0=price_data.index[0], x1=price_data.index[-1], y0=30, y1=30,
+                row=2, col=1
+            )
+            fig.add_shape(
+                type="line", line=dict(dash="dot", width=0.5, color="gray"),
+                x0=price_data.index[0], x1=price_data.index[-1], y0=50, y1=50,
+                row=2, col=1
+            )
+        
+        # Update layout for daily chart
+        fig.update_layout(
+            title="Daily Technical Chart Analysis",
+            height=600,
+            xaxis_rangeslider_visible=False,
+            yaxis2=dict(range=[0, 100]),
+            showlegend=True,
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            margin=dict(l=50, r=50, t=80, b=50),
         )
+        
+        st.plotly_chart(fig, use_container_width=True)
     
-    # Update layout
-    fig.update_layout(
-        title="Technical Chart Analysis",
-        height=800,
-        xaxis_rangeslider_visible=False,
-        yaxis2=dict(range=[0, 100]),
-        showlegend=True,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        margin=dict(l=50, r=50, t=80, b=50),
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
+    with monthly_tab:
+        if monthly_price_data is not None and len(monthly_price_data) > 0:
+            # Create figure with subplots for monthly data
+            fig2 = make_subplots(
+                rows=2, 
+                cols=1,
+                shared_xaxes=True,
+                vertical_spacing=0.05,
+                row_heights=[0.6, 0.4],
+                subplot_titles=("Monthly Price", "Monthly MACD")
+            )
+            
+            # Add monthly price candlestick chart
+            fig2.add_trace(
+                go.Candlestick(
+                    x=monthly_price_data.index,
+                    open=monthly_price_data['Open'],
+                    high=monthly_price_data['High'],
+                    low=monthly_price_data['Low'],
+                    close=monthly_price_data['Close'],
+                    name="Monthly Price"
+                ),
+                row=1, col=1
+            )
+            
+            # Add monthly MACD
+            if macd_line is not None and signal_line is not None:
+                fig2.add_trace(
+                    go.Scatter(x=monthly_price_data.index, y=macd_line, name="MACD", line=dict(color="blue", width=2)),
+                    row=2, col=1
+                )
+                fig2.add_trace(
+                    go.Scatter(x=monthly_price_data.index, y=signal_line, name="Signal", line=dict(color="red", width=2)),
+                    row=2, col=1
+                )
+                
+                # Add MACD histogram
+                histogram = macd_line - signal_line
+                colors = ['green' if val >= 0 else 'red' for val in histogram]
+                fig2.add_trace(
+                    go.Bar(x=monthly_price_data.index, y=histogram, name="Histogram", marker_color=colors),
+                    row=2, col=1
+                )
+                
+                # Add markers for MACD cross points
+                cross_signal = (macd_line > signal_line).astype(int)
+                cross_points = cross_signal.diff().fillna(0)
+                
+                # Golden crosses
+                golden_cross_indices = monthly_price_data.index[cross_points == 1]
+                if len(golden_cross_indices) > 0:
+                    golden_cross_values = [0] * len(golden_cross_indices)  # y-values for markers
+                    fig2.add_trace(
+                        go.Scatter(
+                            x=golden_cross_indices,
+                            y=golden_cross_values,
+                            mode='markers',
+                            marker=dict(symbol='triangle-up', size=12, color='green'),
+                            name='Golden Cross'
+                        )
+            
+            # Update layout for monthly chart
+            fig2.update_layout(
+                title="Monthly Technical Chart Analysis",
+                height=600,
+                xaxis_rangeslider_visible=False,
+                showlegend=True,
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                margin=dict(l=50, r=50, t=80, b=50),
+            )
+            
+            st.plotly_chart(fig2, use_container_width=True)
+            
+            # Add explanation about monthly MACD
+            current_status = result.get("current_macd_status", "UNKNOWN")
+            status_class = "bullish" if current_status == "BULLISH" else "bearish" if current_status == "BEARISH" else "neutral"
+            
+            st.markdown(f"""
+            <div style="padding: 15px; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 20px;">
+                <h4>Monthly MACD Analysis</h4>
+                <p>
+                    The monthly MACD provides a longer-term perspective on market trends and can identify major trend changes.
+                    <ul>
+                        <li>A <strong>Golden Cross (Monthly)</strong> occurs when the MACD line crosses above the signal line on the monthly chart, suggesting a strong bullish trend.</li>
+                        <li>A <strong>Death Cross (Monthly)</strong> occurs when the MACD line crosses below the signal line on the monthly chart, suggesting a strong bearish trend.</li>
+                    </ul>
+                </p>
+                <p>Current MACD Status: <span class="{status_class}">{current_status}</span></p>
+                <p><strong>Note:</strong> Monthly crosses are significant and can indicate major market cycle changes that may last for months or years.</p>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.warning("Insufficient monthly data available for display")
     
     # Display technical summary
     st.subheader("Technical Analysis Summary")
@@ -673,29 +758,6 @@ def display_charts(result):
             </p>
         </div>
         """, unsafe_allow_html=True)
-    
-    with col2:
-        rsi_level = "OVERBOUGHT" if result["rsi"] > 70 else "OVERSOLD" if result["rsi"] < 30 else "NEUTRAL"
-        rsi_class = "bearish" if rsi_level == "OVERBOUGHT" else "bullish" if rsi_level == "OVERSOLD" else "neutral"
-        
-        st.markdown(f"""
-        <div style="padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
-            <h4>RSI Analysis</h4>
-            <p>Current RSI: {result["rsi"]:.2f}</p>
-            <p>Level: <span class="{rsi_class}">{rsi_level}</span></p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col3:
-        macd_class = "bullish" if result["macd_signal"] == "GOLDEN CROSS" else "bearish" if result["macd_signal"] == "DEATH CROSS" else "neutral"
-        
-        st.markdown(f"""
-        <div style="padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
-            <h4>MACD Signal</h4>
-            <p class="{macd_class}">{result["macd_signal"]}</p>
-            <p>EMA Alignment: {result["ema_symbol"]}</p>
-        </div>
-        """, unsafe_allow_html=True)
 
 def export_to_csv(results):
     """Create and return a CSV download link"""
@@ -706,6 +768,8 @@ def export_to_csv(results):
             "Name": r["name"],
             "RSI": r["rsi"],
             "MACD Signal": r["macd_signal"],
+            "Cross Date": r.get("cross_date", ""),
+            "Current MACD Status": r.get("current_macd_status", ""),
             "Sentiment": r["sentiment"],
             "Symbol": r["symbol"],
             "EMA Aligned": "Yes" if r.get("ema_aligned", False) else "No"
@@ -999,3 +1063,62 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
+    with col2:
+        rsi_level = "OVERBOUGHT" if result["rsi"] > 70 else "OVERSOLD" if result["rsi"] < 30 else "NEUTRAL"
+        rsi_class = "bearish" if rsi_level == "OVERBOUGHT" else "bullish" if rsi_level == "OVERSOLD" else "neutral"
+        
+        st.markdown(f"""
+        <div style="padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+            <h4>RSI Analysis (Daily)</h4>
+            <p>Current RSI: {result["rsi"]:.2f}</p>
+            <p>Level: <span class="{rsi_class}">{rsi_level}</span></p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        macd_class = "bullish" if "GOLDEN CROSS" in result["macd_signal"] else "bearish" if "DEATH CROSS" in result["macd_signal"] else "neutral"
+        current_status = result.get("current_macd_status")
+        current_status_class = "bullish" if current_status == "BULLISH" else "bearish" if current_status == "BEARISH" else ""
+        
+        st.markdown(f"""
+        <div style="padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+            <h4>MACD Signal (Monthly)</h4>
+            <p class="{macd_class}">{result["macd_signal"]}</p>
+            <p>Current Status: <span class="{current_status_class}">{current_status or 'UNKNOWN'}</span></p>
+            <p>EMA Alignment (Daily): {result["ema_symbol"]}</p>
+        </div>
+        """, unsafe_allow_html=True),
+                        row=2, col=1
+                    )
+                
+                # Death crosses
+                death_cross_indices = monthly_price_data.index[cross_points == -1]
+                if len(death_cross_indices) > 0:
+                    death_cross_values = [0] * len(death_cross_indices)  # y-values for markers
+                    fig2.add_trace(
+                        go.Scatter(
+                            x=death_cross_indices,
+                            y=death_cross_values,
+                            mode='markers',
+                            marker=dict(symbol='triangle-down', size=12, color='red'),
+                            name='Death Cross'
+                        ),
+                        row=2, col=1
+                    )
+                
+                # Highlight the most recent cross
+                if result.get("cross_date"):
+                    cross_date = result.get("cross_date")
+                    cross_type = "Golden Cross" if "GOLDEN CROSS" in result.get("macd_signal", "") else "Death Cross"
+                    fig2.add_annotation(
+                        x=0.5, y=1.05,
+                        xref="paper", yref="paper",
+                        text=f"Most Recent {cross_type}: {cross_date}",
+                        showarrow=False,
+                        font=dict(color="black", size=14),
+                        bgcolor="#f9f9f9",
+                        bordercolor="#c7c7c7",
+                        borderwidth=1,
+                        borderpad=4
+                    )
