@@ -77,7 +77,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 @st.cache_data(ttl=3600)  # Cache data for 1 hour
-def fetch_data(ticker, daily_period="6mo", monthly_period="1y", daily_interval="1d", monthly_interval="1mo"):
+def fetch_data(ticker, daily_period="6mo", monthly_period="3y", daily_interval="1d", monthly_interval="1mo"):
     """Fetch historical data for a ticker with both daily and monthly timeframes"""
     try:
         # Create a Ticker object
