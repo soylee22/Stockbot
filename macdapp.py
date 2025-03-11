@@ -938,7 +938,7 @@ def main():
         categories = st.sidebar.multiselect(
             "Select categories to scan",
             available_categories,
-            default=["INDICES", "US STOCKS"]  # Default selections
+            default=["INDICES", "COMMODITIES", "FOREX"]  # Default selections
         )
     elif scan_option == "Specific Tickers":
         # Allow specific tickers
