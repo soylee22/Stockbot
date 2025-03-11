@@ -448,7 +448,10 @@ SYMBOL_EXPLANATION = {
     "⚠️⚠️": "Daily Bullish, Weekly Bearish (Caution)",
     "💀💀": "Both Daily and Weekly Bearish",
     "✅": "EMAs aligned (7 EMA > 11 EMA > 21 EMA) on Daily Timeframe",
-    "❌": "EMAs NOT aligned on Daily Timeframe"
+    "❌": "EMAs NOT aligned on Daily Timeframe",
+    "🔼": "MACD Golden Cross (MACD crosses above Signal) on Monthly Timeframe",
+    "🔽": "MACD Death Cross (MACD crosses below Signal) on Monthly Timeframe",
+    "➖": "No MACD Cross detected"
 }
 
 # Expanded FTSE 100 stocks
@@ -1059,6 +1062,59 @@ def calculate_rsi_signal(rsi_series, period=14):
     
     signal_line = rsi_series.rolling(window=period).mean()
     return signal_line
+def detect_macd_cross_monthly(ticker):
+    """
+    Detect the most recent MACD golden cross or death cross on monthly timeframe
+    A golden cross occurs when the MACD line crosses above the signal line
+    A death cross occurs when the MACD line crosses below the signal line
+    
+    Returns a tuple of (cross_type, date_of_cross)
+    """
+    try:
+        # Fetch monthly data
+        monthly_data = fetch_stock_data(ticker, period="5y", interval="1mo")
+        
+        if monthly_data.empty or len(monthly_data) < 30:
+            return "Insufficient Data", None
+        
+        # Calculate MACD for monthly data
+        macd_monthly = calculate_macd(monthly_data)
+        macd_line = macd_monthly['macd_line']
+        signal_line = macd_monthly['signal_line']
+        
+        # Drop NaN values
+        valid_idx = signal_line.dropna().index
+        if len(valid_idx) < 2:
+            return "Insufficient Data", None
+            
+        macd_line = macd_line[valid_idx]
+        signal_line = signal_line[valid_idx]
+        
+        # Find crossover points
+        # Golden Cross: MACD crosses above Signal
+        # Death Cross: MACD crosses below Signal
+        golden_cross = (macd_line.shift(1) < signal_line.shift(1)) & (macd_line > signal_line)
+        death_cross = (macd_line.shift(1) > signal_line.shift(1)) & (macd_line < signal_line)
+        
+        # Get the most recent cross
+        last_golden_cross = golden_cross[golden_cross].index.max() if any(golden_cross) else None
+        last_death_cross = death_cross[death_cross].index.max() if any(death_cross) else None
+        
+        # Determine the most recent cross
+        if last_golden_cross is not None and last_death_cross is not None:
+            if last_golden_cross > last_death_cross:
+                return "MACD Golden Cross", last_golden_cross
+            else:
+                return "MACD Death Cross", last_death_cross
+        elif last_golden_cross is not None:
+            return "MACD Golden Cross", last_golden_cross
+        elif last_death_cross is not None:
+            return "MACD Death Cross", last_death_cross
+        else:
+            return "No MACD Cross", None
+    
+    except Exception as e:
+        return f"Error: {str(e)}", None
 
 def calculate_rsi(data, window=14):
     """
@@ -1218,6 +1274,23 @@ def scan_ticker(ticker, display_name):
             macd_above_signal = False
             macd_status = "❌"
 
+        # Inside your scan_ticker function, add this after the MACD calculation:
+
+        # Detect MACD golden/death cross on monthly timeframe
+        cross_type, cross_date = detect_macd_cross_monthly(ticker)
+        cross_date_str = cross_date.strftime('%Y-%m-%d') if cross_date is not None else "N/A"
+        
+        # Adjust score based on cross type
+        if cross_type == "MACD Golden Cross":
+            bullish_score += 15  # Add bonus points for recent golden cross
+            cross_emoji = "🔼"
+        elif cross_type == "MACD Death Cross":
+            bullish_score -= 15  # Subtract points for recent death cross
+            cross_emoji = "🔽"
+        else:
+            cross_emoji = "➖"
+        
+    
         ema_aligned = check_ema_alignment(emas)
         
         # Determine conditions
@@ -1273,6 +1346,9 @@ def scan_ticker(ticker, display_name):
             "daily_data": daily_data,
             "weekly_data": weekly_data,
             "emas": emas,
+            "cross_type": cross_type,
+            "cross_date": cross_date_str,
+            "cross_emoji": cross_emoji,
             "error": None
         }
     
@@ -1412,6 +1488,14 @@ def display_signal_legend():
             <tr>
                 <td style="padding:10px;width:60px;text-align:center;"><span style="font-size:24px;">❌</span></td>
                 <td style="color: #1F2937; font-weight: 500;">EMAs NOT aligned on Daily Timeframe</td>
+            </tr>
+            <tr>
+                <td style="padding:10px;width:60px;text-align:center;"><span style="font-size:24px;">🔼</span></td>
+                <td style="color: #1F2937; font-weight: 500;">MACD Golden Cross (MACD crosses above Signal) on Monthly Timeframe</td>
+            </tr>
+            <tr>
+                <td style="padding:10px;width:60px;text-align:center;"><span style="font-size:24px;">🔽</span></td>
+                <td style="color: #1F2937; font-weight: 500;">MACD Death Cross (MACD crosses below Signal) on Monthly Timeframe</td>
             </tr>
         </table>
     </div>
@@ -1872,14 +1956,21 @@ def main():
                             st.info(f"No data available for {category}.")
                 
                 # Signal Categories tab
+                # Signal Categories tab
                 with tabs[-1]:  # The last tab (Signal Categories)
-                    signal_subtabs = st.tabs(["🚀 Bulls", "🕣 Waiting", "⚠️ Caution", "💀 Bears"])
+                    signal_subtabs = st.tabs(["🚀 Bulls", "🕣 Waiting", "⚠️ Caution", "💀 Bears", "🔼 MACD Golden Cross", "🔽 MACD Death Cross"])
                     
                     # Group results by signal type
                     rocket_results = [r for r in valid_results if r["emoji"] == "🚀🚀"]
                     clock_results = [r for r in valid_results if r["emoji"] == "🕣🕣"]
                     warning_results = [r for r in valid_results if r["emoji"] == "⚠️⚠️"]
                     death_results = [r for r in valid_results if r["emoji"] == "💀💀"]
+                    golden_cross_results = [r for r in valid_results if r["cross_type"] == "MACD Golden Cross"]
+                    death_cross_results = [r for r in valid_results if r["cross_type"] == "MACD Death Cross"]
+                    
+                    # Sort the cross results by date (most recent first)
+                    golden_cross_results = sorted(golden_cross_results, key=lambda x: x["cross_date"], reverse=True)
+                    death_cross_results = sorted(death_cross_results, key=lambda x: x["cross_date"], reverse=True)
                     
                     # Bulls subtab (rocket emoji)
                     with signal_subtabs[0]:
