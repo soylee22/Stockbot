@@ -77,16 +77,20 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 @st.cache_data(ttl=3600)  # Cache data for 1 hour
-def fetch_data(ticker, period="6mo", interval="1d"):
-    """Fetch historical data for a ticker"""
+def fetch_data(ticker, daily_period="6mo", monthly_period="5y", daily_interval="1d", monthly_interval="1mo"):
+    """Fetch historical data for a ticker with both daily and monthly timeframes"""
     try:
         # Create a Ticker object
         ticker_obj = yf.Ticker(ticker)
         
-        # Fetch historical data
-        data = ticker_obj.history(period=period, interval=interval)
-        if data.empty:
-            return None, None
+        # Fetch daily historical data
+        daily_data = ticker_obj.history(period=daily_period, interval=daily_interval)
+        
+        # Fetch monthly historical data
+        monthly_data = ticker_obj.history(period=monthly_period, interval=monthly_interval)
+        
+        if daily_data.empty or monthly_data.empty:
+            return None, None, None
             
         # Fetch indicators directly from Yahoo Finance
         indicators = {}
@@ -94,12 +98,11 @@ def fetch_data(ticker, period="6mo", interval="1d"):
         # Get RSI
         indicators['rsi'] = ticker_obj.info.get('rsi14') if hasattr(ticker_obj, 'info') and ticker_obj.info else None
         
-        # If we can't get these indicators directly, we'll calculate them
-        # But the main price data is still useful
-        return data, indicators
+        # Return both daily and monthly data
+        return daily_data, monthly_data, indicators
     except Exception as e:
         st.error(f"Error fetching data for {ticker}: {e}")
-        return None, None
+        return None, None, None
 
 def calculate_rsi(data, window=14):
     """Calculate RSI for the given data"""
