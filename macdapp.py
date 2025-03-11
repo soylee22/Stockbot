@@ -390,16 +390,27 @@ def create_results_dataframe(results):
         # Format signal with days since cross
         signal_text = r["macd_signal"]
         days_since_cross = r.get("days_since_cross")
-        if days_since_cross is not None and signal_text in ["GOLDEN CROSS", "DEATH CROSS"]:
-            # If the cross is today (0 days), show "Today"
+        if days_since_cross is not None and ("GOLDEN CROSS" in signal_text or "DEATH CROSS" in signal_text):
+            # If the cross is recent, provide more context
             if days_since_cross == 0:
-                cross_when = "Today"
+                cross_when = "This month"
             elif days_since_cross == 1:
-                cross_when = "Yesterday"
+                cross_when = "Last month"
             else:
-                cross_when = f"{days_since_cross} days ago"
+                cross_when = f"{days_since_cross} months ago"
                 
-            signal_text = f"{signal_text} ({cross_when})"
+            # If it's a monthly cross, we want to indicate timing in terms of months
+            if "(MONTHLY)" in signal_text:
+                signal_text = f"{signal_text} ({cross_when})"
+            else:
+                # For any daily signals (which should no longer happen with the changes)
+                if days_since_cross == 0:
+                    cross_when = "Today"
+                elif days_since_cross == 1:
+                    cross_when = "Yesterday"
+                else:
+                    cross_when = f"{days_since_cross} days ago"
+                signal_text = f"{signal_text} ({cross_when})"
         
         # Get the sentiment score (added as third return value to determine_market_sentiment)
         sentiment_score = r.get("sentiment_score", 50)  # Default to neutral if not available
