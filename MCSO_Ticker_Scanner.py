@@ -102,6 +102,45 @@ def calculate_mcso(ticker_symbol, period="1mo", interval="1d"):
         st.error(f"Error calculating MCSO for {ticker_symbol}: {e}")
         return None, None, None, None
 
+# Add new function to display a consolidated "All Tickers" table
+def display_all_tickers_table(results_df, mcso_threshold):
+    """Display a consolidated table with all tickers."""
+    st.markdown("""
+    <div class="category-header">
+        <h3>All Tickers (Consolidated View)</h3>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Create a styled dataframe for all tickers
+    styled_df = results_df[['Category', 'Ticker', 'Name', 'MCSO', 'Current', 'Month Low', 'Month High', 'Status']].copy()
+    
+    # Sort by MCSO (high to low)
+    styled_df = styled_df.sort_values(by='MCSO', ascending=False)
+    
+    # Format the display
+    styled_df['MCSO'] = styled_df['MCSO'].round(2)
+    styled_df['Current'] = styled_df['Current'].round(2)
+    styled_df['Month Low'] = styled_df['Month Low'].round(2)
+    styled_df['Month High'] = styled_df['Month High'].round(2)
+    
+    # Apply row styling based on MCSO value
+    def style_rows(row):
+        if row['MCSO'] >= mcso_threshold:
+            return ['background-color: rgba(0, 128, 0, 0.1)'] * len(row)
+        return ['background-color: transparent'] * len(row)
+    
+    styled_df = styled_df.style.apply(style_rows, axis=1)
+    
+    # Format the numeric columns
+    styled_df = styled_df.format({
+        'MCSO': '{:.2f}',
+        'Current': '{:.2f}',
+        'Month Low': '{:.2f}',
+        'Month High': '{:.2f}'
+    })
+    
+    st.dataframe(styled_df, use_container_width=True)
+
 def scan_tickers(categories, min_mcso=50, progress_bar=None):
     """
     Scan tickers from selected categories and return those with calculated MCSO.
