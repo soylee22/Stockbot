@@ -62,45 +62,34 @@ def calculate_mcso(ticker_symbol, period="1mo", interval="1d"):
     MCSO = ((close - month_low) / (month_high - month_low)) * 100
     """
     try:
-        # Special handling for index tickers (they may need more data)
-        if ticker_symbol.startswith('^'):
-            # Use longer period for indices to ensure enough data
-            download_period = "3mo"
-        else:
-            download_period = period
-            
+        # Index tickers (starting with ^) need a longer period to ensure enough data
+        actual_period = "3mo" if ticker_symbol.startswith('^') else period
+        
         # Get historical data
-        data = yf.download(ticker_symbol, period=download_period, interval=interval, progress=False)
+        data = yf.download(ticker_symbol, period=actual_period, interval=interval, progress=False)
         
         # Check if data is empty or too small
         if data.empty or len(data) < 5:  # Need at least a few days of data
             return None, None, None, None
         
-        # For indices, keep only the most recent period data after download
-        if ticker_symbol.startswith('^') and download_period != period:
-            # Keep only the most recent data matching the requested period
-            if period == "1mo":
-                data = data.iloc[-30:]  # Approximate a month of trading days
-            
-        # Calculate monthly high and low (using last 20 bars or available data)
-        window_size = min(20, len(data))
+        # For index tickers, use more recent data matching the original requested period
+        if ticker_symbol.startswith('^') and period == "1mo":
+            # Keep approximately one month of trading days
+            data = data.tail(22)  # ~22 trading days in a month
         
-        # Use explicit Series selection to avoid any ambiguity
-        high_series = data['High'].iloc[-window_size:]
-        low_series = data['Low'].iloc[-window_size:]
+        # Calculate monthly high and low (using last 20 bars as in the script)
+        month_high = data['High'].rolling(window=20).max().iloc[-1]
+        month_low = data['Low'].rolling(window=20).min().iloc[-1]
+        close = data['Close'].iloc[-1]
         
-        # Calculate high and low explicitly
-        month_high = high_series.max()
-        month_low = low_series.min()
-        
-        # Ensure we get scalar values
-        if pd.isna(month_high) or pd.isna(month_low):
+        # Convert to float to ensure scalar values
+        try:
+            month_high = float(month_high)
+            month_low = float(month_low)
+            close = float(close)
+        except (TypeError, ValueError):
+            # If conversion fails, it's likely we have invalid data
             return None, None, None, None
-            
-        # Convert to Python float to ensure scalar values
-        month_high = float(month_high)
-        month_low = float(month_low)
-        close = float(data['Close'].iloc[-1])
         
         # Calculate MCSO - check numeric equality properly for floats
         if abs(month_high - month_low) < 1e-6:  # Avoid division by zero
