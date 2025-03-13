@@ -70,9 +70,16 @@ def calculate_mcso(ticker_symbol, period="1mo", interval="1d"):
             return None, None, None, None
         
         # Calculate monthly high and low (using last 20 bars as in the script)
-        month_high = data['High'].rolling(window=20).max().iloc[-1]
-        month_low = data['Low'].rolling(window=20).min().iloc[-1]
-        close = data['Close'].iloc[-1]
+        rolling_high = data['High'].rolling(window=20).max()
+        rolling_low = data['Low'].rolling(window=20).min()
+        
+        # Ensure we have scalar values
+        if rolling_high.empty or rolling_low.empty:
+            return None, None, None, None
+            
+        month_high = float(rolling_high.iloc[-1])
+        month_low = float(rolling_low.iloc[-1])
+        close = float(data['Close'].iloc[-1])
         
         # Calculate MCSO - check numeric equality properly for floats
         if abs(month_high - month_low) < 1e-6:  # Avoid division by zero
