@@ -333,8 +333,14 @@ if st.sidebar.button("Run Scan", type="primary"):
             with col3:
                 st.metric("Bearish (MCSO < 50)", bearish_count)
             
-            # Display MCSO distribution chart
+                        ## Display MCSO distribution chart
             display_mcso_chart(results_df)
+            
+            # Display the consolidated "All Tickers" table
+            display_all_tickers_table(results_df, mcso_threshold)
+            
+            # Display results by category
+            st.subheader("Scan Results")
             
             # Display results by category
             st.subheader("Scan Results")
