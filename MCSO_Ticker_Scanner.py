@@ -342,9 +342,6 @@ if st.sidebar.button("Run Scan", type="primary"):
             # Display results by category
             st.subheader("Scan Results")
             
-            # Display results by category
-            st.subheader("Scan Results")
-            
             # Add download button for CSV
             csv = results_df.to_csv(index=False)
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
