@@ -65,6 +65,7 @@ def calculate_mcso(ticker_symbol, period="1mo", interval="1d"):
         # Get historical data
         data = yf.download(ticker_symbol, period=period, interval=interval, progress=False)
         
+        # Check if data is empty or too small
         if data.empty or len(data) < 5:  # Need at least a few days of data
             return None, None, None, None
         
@@ -73,8 +74,8 @@ def calculate_mcso(ticker_symbol, period="1mo", interval="1d"):
         month_low = data['Low'].rolling(window=20).min().iloc[-1]
         close = data['Close'].iloc[-1]
         
-        # Calculate MCSO
-        if month_high == month_low:  # Avoid division by zero
+        # Calculate MCSO - check numeric equality properly for floats
+        if abs(month_high - month_low) < 1e-6:  # Avoid division by zero
             return 0, close, month_low, month_high
         
         mcso = ((close - month_low) / (month_high - month_low)) * 100
