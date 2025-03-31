@@ -4,10 +4,13 @@ pip>=21.0
 # Ensure setuptools is installed
 setuptools
 
+# Pin NumPy to a compatible version (e.g., <2.0)
+numpy<2.0
+
 # Your other dependencies
 streamlit
 yfinance
 pandas
-numpy
+numpy # Keep numpy here too, the pin above takes precedence
 plotly
 pandas-ta
