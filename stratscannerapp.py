@@ -4,8 +4,6 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 import pandas_ta as ta # Essential for indicator calculation
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import time
 
 # Import ticker categories (keep using your tickers.py)
@@ -40,15 +38,23 @@ st.set_page_config(
 )
 
 # --- Custom CSS ---
-# Keep the CSS for setup styling
 st.markdown("""
 <style>
-    .setup-long { background-color: #d4edda; color: #155724; padding: 2px 5px; border-radius: 3px; font-weight: bold; }
-    .setup-short { background-color: #f8d7da; color: #721c24; padding: 2px 5px; border-radius: 3px; font-weight: bold; }
-    .setup-watch { background-color: #fff3cd; color: #856404; padding: 2px 5px; border-radius: 3px; font-weight: bold; }
-    .dataframe-container { border-radius: 5px; overflow-x: auto; } /* Allow horizontal scroll */
-    .dataframe tr:hover { background-color: rgba(0,0,0,0.05) !important; cursor: pointer; }
-    .dataframe td[align="right"], .dataframe th[align="right"] { text-align: right !important; }
+    /* Enhanced setup styling with stronger colors */
+    .setup-long { background-color: #28a745; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
+    .setup-short { background-color: #dc3545; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
+    .setup-watch { background-color: #ffc107; color: black; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
+    .setup-none { background-color: #6c757d; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
+    
+    /* Cell colors for metrics */
+    .bullish { background-color: rgba(40, 167, 69, 0.2); }
+    .bearish { background-color: rgba(220, 53, 69, 0.2); }
+    .neutral { background-color: rgba(108, 117, 125, 0.1); }
+    
+    .stDataFrame [data-testid="stDataFrameResizable"] {
+        max-height: 600px;
+        overflow-y: auto;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -104,6 +110,11 @@ def calculate_strategy_indicators(data):
         # Combined daily price check helper
         indicators['Daily_Price_Structure_Long'] = indicators['Price_Above_EMA_Short'] and indicators['Price_Above_EMA_Long']
         indicators['Daily_Price_Structure_Short'] = indicators['Price_Below_EMA_Short'] and indicators['Price_Below_EMA_Long']
+        
+        # Add RSI and MACD actual values for display
+        indicators['RSI_Value'] = round(indicators[f'RSI_{RSI_WINDOW}'], 1)
+        indicators['MACD_Value'] = round(indicators['MACD_Line'], 3)
+        
         return indicators, data_copy
     except Exception as e:
         st.error(f"Error calculating indicators: {str(e)}")
@@ -111,47 +122,151 @@ def calculate_strategy_indicators(data):
 
 
 def check_strategy_setup(conditions_indicators, entry_indicators):
-    if not conditions_indicators or not entry_indicators: return "Error", 0, []
+    if not conditions_indicators or not entry_indicators: return "Error", 0, [], {}
     setup_long_status = "None"; positive_score = 0; rules_met_long_details = []
     setup_short_status = "None"; negative_score_magnitude = 0; rules_met_short_details = []
-    # LONG Checks
+    
+    # Collect all metrics for display
+    all_metrics = {}
+    
+    # LONG Checks - Weekly
     cond_r_ok_l = conditions_indicators.get('RSI_Bullish', False)
     cond_m_ok_l = conditions_indicators.get('MACD_Bullish', False)
     cond_p_ok_l = conditions_indicators.get('Price_Above_EMA_Long', False)
     conditions_long_met = cond_r_ok_l and cond_m_ok_l and cond_p_ok_l
+    
+    # Store metrics from weekly timeframe
+    all_metrics['W_RSI'] = {
+        'value': conditions_indicators.get('RSI_Value', 0),
+        'signal': 'bullish' if cond_r_ok_l else 'bearish',
+        'desc': 'RSI > 50' if cond_r_ok_l else 'RSI < 50'
+    }
+    
+    all_metrics['W_MACD'] = {
+        'value': conditions_indicators.get('MACD_Value', 0),
+        'signal': 'bullish' if cond_m_ok_l else 'bearish',
+        'desc': 'MACD Bull' if cond_m_ok_l else 'MACD Bear'
+    }
+    
+    all_metrics['W_Price_EMA'] = {
+        'value': f"{conditions_indicators.get('Close', 0):.2f} vs {conditions_indicators.get(f'EMA_{EMA_LONG}', 0):.2f}",
+        'signal': 'bullish' if cond_p_ok_l else 'bearish',
+        'desc': f'Price > EMA{EMA_LONG}' if cond_p_ok_l else f'Price < EMA{EMA_LONG}'
+    }
+    
     if conditions_long_met:
         positive_score = 3; rules_met_long_details = ["W:RSI>50", "W:MACD Bull", "W:Prc>EMA_L"]
         entry_rules_met_count_l = 0
-        if entry_indicators.get('RSI_Bullish', False): entry_rules_met_count_l += 1; rules_met_long_details.append("D:RSI>50")
-        if entry_indicators.get('MACD_Bullish', False): entry_rules_met_count_l += 1; rules_met_long_details.append("D:MACD Bull")
-        if entry_indicators.get('Daily_Price_Structure_Long', False): entry_rules_met_count_l += 1; rules_met_long_details.append("D:Prc>EMAs")
-        if entry_rules_met_count_l >= MIN_ENTRY_RULES_MET: setup_long_status = "Potential Long"; positive_score += entry_rules_met_count_l
-        else: setup_long_status = "Watch Long"
-    # SHORT Checks
+        
+        # Daily Metrics for Long
+        if entry_indicators.get('RSI_Bullish', False): 
+            entry_rules_met_count_l += 1
+            rules_met_long_details.append("D:RSI>50")
+        
+        if entry_indicators.get('MACD_Bullish', False): 
+            entry_rules_met_count_l += 1
+            rules_met_long_details.append("D:MACD Bull")
+        
+        if entry_indicators.get('Daily_Price_Structure_Long', False): 
+            entry_rules_met_count_l += 1
+            rules_met_long_details.append("D:Prc>EMAs")
+        
+        if entry_rules_met_count_l >= MIN_ENTRY_RULES_MET: 
+            setup_long_status = "Potential Long"
+            positive_score += entry_rules_met_count_l
+        else: 
+            setup_long_status = "Watch Long"
+    
+    # SHORT Checks - Weekly
     cond_r_ok_s = conditions_indicators.get('RSI_Bearish', False)
     cond_m_ok_s = conditions_indicators.get('MACD_Bearish', False)
     cond_p_ok_s = conditions_indicators.get('Price_Below_EMA_Long', False)
     conditions_short_met = cond_r_ok_s and cond_m_ok_s and cond_p_ok_s
+    
     if conditions_short_met:
         negative_score_magnitude = 3; rules_met_short_details = ["W:RSI<50", "W:MACD Bear", "W:Prc<EMA_L"]
         entry_rules_met_count_s = 0
-        if entry_indicators.get('RSI_Bearish', False): entry_rules_met_count_s += 1; rules_met_short_details.append("D:RSI<50")
-        if entry_indicators.get('MACD_Bearish', False): entry_rules_met_count_s += 1; rules_met_short_details.append("D:MACD Bear")
-        if entry_indicators.get('Daily_Price_Structure_Short', False): entry_rules_met_count_s += 1; rules_met_short_details.append("D:Prc<EMAs")
-        if entry_rules_met_count_s >= MIN_ENTRY_RULES_MET: setup_short_status = "Potential Short"; negative_score_magnitude += entry_rules_met_count_s
-        else: setup_short_status = "Watch Short"
+        
+        # Daily Metrics for Short
+        if entry_indicators.get('RSI_Bearish', False): 
+            entry_rules_met_count_s += 1
+            rules_met_short_details.append("D:RSI<50")
+        
+        if entry_indicators.get('MACD_Bearish', False): 
+            entry_rules_met_count_s += 1
+            rules_met_short_details.append("D:MACD Bear")
+        
+        if entry_indicators.get('Daily_Price_Structure_Short', False): 
+            entry_rules_met_count_s += 1
+            rules_met_short_details.append("D:Prc<EMAs")
+        
+        if entry_rules_met_count_s >= MIN_ENTRY_RULES_MET: 
+            setup_short_status = "Potential Short"
+            negative_score_magnitude += entry_rules_met_count_s
+        else: 
+            setup_short_status = "Watch Short"
+    
+    # Store daily metrics
+    all_metrics['D_RSI'] = {
+        'value': entry_indicators.get('RSI_Value', 0),
+        'signal': 'bullish' if entry_indicators.get('RSI_Bullish', False) else 'bearish',
+        'desc': 'RSI > 50' if entry_indicators.get('RSI_Bullish', False) else 'RSI < 50'
+    }
+    
+    all_metrics['D_MACD'] = {
+        'value': entry_indicators.get('MACD_Value', 0),
+        'signal': 'bullish' if entry_indicators.get('MACD_Bullish', False) else 'bearish',
+        'desc': 'MACD Bull' if entry_indicators.get('MACD_Bullish', False) else 'MACD Bear'
+    }
+    
+    # Daily Price Structure
+    price_structure = 'neutral'
+    price_desc = 'Mixed'
+    
+    if entry_indicators.get('Daily_Price_Structure_Long', False):
+        price_structure = 'bullish'
+        price_desc = f'Price > EMA{EMA_SHORT} & EMA{EMA_LONG}'
+    elif entry_indicators.get('Daily_Price_Structure_Short', False):
+        price_structure = 'bearish'
+        price_desc = f'Price < EMA{EMA_SHORT} & EMA{EMA_LONG}'
+    
+    all_metrics['D_Price_EMA'] = {
+        'value': f"{entry_indicators.get('Close', 0):.2f} vs {entry_indicators.get(f'EMA_{EMA_SHORT}', 0):.2f}/{entry_indicators.get(f'EMA_{EMA_LONG}', 0):.2f}",
+        'signal': price_structure,
+        'desc': price_desc
+    }
+    
     # Determine Final
     final_setup = "None"; final_score = 0; final_rules = []
-    if setup_long_status == "Potential Long" and setup_short_status != "Potential Short": final_setup = setup_long_status; final_score = positive_score; final_rules = rules_met_long_details
-    elif setup_short_status == "Potential Short" and setup_long_status != "Potential Long": final_setup = setup_short_status; final_score = -negative_score_magnitude; final_rules = rules_met_short_details
-    elif setup_long_status == "Watch Long" and setup_short_status == "None": final_setup = setup_long_status; final_score = positive_score; final_rules = rules_met_long_details
-    elif setup_short_status == "Watch Short" and setup_long_status == "None": final_setup = setup_short_status; final_score = -negative_score_magnitude; final_rules = rules_met_short_details
-    elif setup_long_status == "Potential Long" and setup_short_status == "Potential Short": final_setup = "Conflicting"; final_score = 0; final_rules = ["Conflicting"]
-    else: final_setup = "None"; final_score = 0; final_rules = []
-    return final_setup, final_score, final_rules
+    if setup_long_status == "Potential Long" and setup_short_status != "Potential Short": 
+        final_setup = setup_long_status
+        final_score = positive_score
+        final_rules = rules_met_long_details
+    elif setup_short_status == "Potential Short" and setup_long_status != "Potential Long": 
+        final_setup = setup_short_status
+        final_score = -negative_score_magnitude
+        final_rules = rules_met_short_details
+    elif setup_long_status == "Watch Long" and setup_short_status == "None": 
+        final_setup = setup_long_status
+        final_score = positive_score
+        final_rules = rules_met_long_details
+    elif setup_short_status == "Watch Short" and setup_long_status == "None": 
+        final_setup = setup_short_status
+        final_score = -negative_score_magnitude
+        final_rules = rules_met_short_details
+    elif setup_long_status == "Potential Long" and setup_short_status == "Potential Short": 
+        final_setup = "Conflicting"
+        final_score = 0
+        final_rules = ["Conflicting"]
+    else: 
+        final_setup = "None"
+        final_score = 0
+        final_rules = []
+    
+    return final_setup, final_score, final_rules, all_metrics
 
 
-def scan_tickers(tickers_dict, max_tickers=25):
+def scan_tickers(tickers_dict, max_tickers=40):
     """Scan tickers with a maximum limit for performance"""
     # Limit the number of tickers to scan
     if len(tickers_dict) > max_tickers:
@@ -178,28 +293,62 @@ def scan_tickers(tickers_dict, max_tickers=25):
             try:
                 data_conditions, data_entry = fetch_strategy_data(ticker)
                 if data_conditions is None or data_entry is None:
-                    results.append({"ticker": ticker, "name": name, "Setup": "Data Error", "Score": 0, "Rules Met": [], "error": True})
+                    results.append({
+                        "ticker": ticker, 
+                        "name": name, 
+                        "Setup": "Data Error", 
+                        "Score": 0, 
+                        "Rules Met": [], 
+                        "error": True,
+                        "metrics": {}
+                    })
                     continue
                     
                 conditions_indicators, data_conditions_with_indicators = calculate_strategy_indicators(data_conditions)
                 entry_indicators, data_entry_with_indicators = calculate_strategy_indicators(data_entry)
                 if conditions_indicators is None or entry_indicators is None:
-                    results.append({"ticker": ticker, "name": name, "Setup": "Calc Error", "Score": 0, "Rules Met": [], "error": True})
+                    results.append({
+                        "ticker": ticker, 
+                        "name": name, 
+                        "Setup": "Calc Error", 
+                        "Score": 0, 
+                        "Rules Met": [], 
+                        "error": True,
+                        "metrics": {}
+                    })
                     continue
                     
-                setup_type, setup_score, rules_met = check_strategy_setup(conditions_indicators, entry_indicators)
+                setup_type, setup_score, rules_met, all_metrics = check_strategy_setup(conditions_indicators, entry_indicators)
+                
+                # Calculate price and date for display
+                current_price = entry_indicators.get('Close', 0) if entry_indicators else 0
+                last_date = data_entry.index[-1].strftime('%Y-%m-%d') if data_entry is not None and not data_entry.empty else "N/A"
+                
                 results.append({
-                    "ticker": ticker, "name": name, "Setup": setup_type, "Score": setup_score,
-                    "Rules Met": ", ".join(rules_met), "error": False,
-                    "_data_conditions": data_conditions_with_indicators, "_data_entry": data_entry_with_indicators,
-                    "_indicators_conditions": conditions_indicators, "_indicators_entry": entry_indicators,
+                    "ticker": ticker, 
+                    "name": name, 
+                    "Setup": setup_type, 
+                    "Score": setup_score,
+                    "Price": round(current_price, 2),
+                    "Last Date": last_date,
+                    "Rules Met": ", ".join(rules_met), 
+                    "error": False,
+                    "metrics": all_metrics
                 })
                 
                 # Small delay to prevent API rate limits and reduce resource usage
                 time.sleep(0.1)
                 
             except Exception as e:
-                results.append({"ticker": ticker, "name": name, "Setup": "Error", "Score": 0, "Rules Met": [f"Error: {str(e)}"], "error": True})
+                results.append({
+                    "ticker": ticker, 
+                    "name": name, 
+                    "Setup": "Error", 
+                    "Score": 0, 
+                    "Rules Met": [f"Error: {str(e)}"], 
+                    "error": True,
+                    "metrics": {}
+                })
     
     except Exception as e:
         st.error(f"Error during scanning: {str(e)}")
@@ -209,225 +358,115 @@ def scan_tickers(tickers_dict, max_tickers=25):
     return results
 
 
+def format_cell(value, signal_type):
+    """Format a table cell with appropriate styling based on signal type"""
+    if signal_type == 'bullish':
+        return f'<span class="bullish">{value}</span>'
+    elif signal_type == 'bearish':
+        return f'<span class="bearish">{value}</span>'
+    else:
+        return f'<span class="neutral">{value}</span>'
+
+
 def display_results_table(results_list):
-    """Displays the filtered scan results with basic info, using HTML for Setup styling."""
+    """Displays the scan results with metrics columns"""
     if not results_list:
         st.warning("No results to display.")
         return None
 
-    # Filter out errors and 'None' setups
-    filtered_results = [r for r in results_list if r['Setup'] not in ["Error", "None", "Calc Error", "Data Error", "Conflicting"]]
+    # Include even if setup is "None" to show all metrics
+    filtered_results = [r for r in results_list if not r['error']]
     
     if not filtered_results:
-        st.info("No potential Long/Short/Watch setups found matching the criteria.")
+        st.info("No valid results found. Try scanning different tickers.")
         return None
 
-    # Use Streamlit's native dataframe for better performance
+    # Build dataframe with all metrics
     df_data = []
     
-    for i, r in enumerate(filtered_results):
+    for r in filtered_results:
+        # Skip 'Error', 'Data Error', 'Calc Error' entries
+        if r['Setup'] in ["Error", "Data Error", "Calc Error"]:
+            continue
+        
         # Define setup class based on the setup type
-        setup_class = ""
+        setup_class = "setup-none"
         if "Long" in r['Setup']: setup_class = "setup-long"
         elif "Short" in r['Setup']: setup_class = "setup-short"
-        if "Watch" in r['Setup']: setup_class += " setup-watch" # Combine if needed
-
-        df_data.append({
+        elif "Watch" in r['Setup']: setup_class = "setup-watch"
+        
+        # Format setup with HTML for styling
+        setup_html = f'<span class="{setup_class}">{r["Setup"]}</span>'
+        
+        # Get metrics from result
+        metrics = r.get('metrics', {})
+        
+        # Create a row with all metrics
+        row_data = {
             "Name": r["name"],
-            "Setup": r["Setup"], 
+            "Ticker": r["ticker"],
+            "Price": r["Price"],
+            "Last Date": r["Last Date"],
+            "Setup": setup_html,
             "Score": r["Score"],
-            "_original_index": results_list.index(r) # Link back to the full results list
-        })
+            "W_RSI": format_cell(metrics.get('W_RSI', {}).get('value', 'N/A'), metrics.get('W_RSI', {}).get('signal', 'neutral')),
+            "W_MACD": format_cell(metrics.get('W_MACD', {}).get('value', 'N/A'), metrics.get('W_MACD', {}).get('signal', 'neutral')),
+            "W_Price_EMA": format_cell(metrics.get('W_Price_EMA', {}).get('value', 'N/A'), metrics.get('W_Price_EMA', {}).get('signal', 'neutral')),
+            "D_RSI": format_cell(metrics.get('D_RSI', {}).get('value', 'N/A'), metrics.get('D_RSI', {}).get('signal', 'neutral')),
+            "D_MACD": format_cell(metrics.get('D_MACD', {}).get('value', 'N/A'), metrics.get('D_MACD', {}).get('signal', 'neutral')),
+            "D_Price_EMA": format_cell(metrics.get('D_Price_EMA', {}).get('value', 'N/A'), metrics.get('D_Price_EMA', {}).get('signal', 'neutral')),
+        }
+        
+        df_data.append(row_data)
 
+    if not df_data:
+        st.info("No valid results to display after filtering.")
+        return None
+
+    # Create DataFrame
     df_display = pd.DataFrame(df_data)
     
     # Default sort: High positive scores first (best Longs), then low negative scores (best Shorts)
     df_display = df_display.sort_values(by="Score", ascending=False).reset_index(drop=True)
-
-    # Use Streamlit's native dataframe display
-    st.dataframe(
-        df_display.drop(columns=['_original_index']),
-        use_container_width=True,
-        column_config={
-            "Name": st.column_config.TextColumn(
-                "Name",
-                width="medium"
-            ),
-            "Setup": st.column_config.TextColumn(
-                "Setup",
-                width="medium"
-            ),
-            "Score": st.column_config.NumberColumn(
-                "Score",
-                format="%d",
-                width="small"
-            )
-        },
-        hide_index=True
+    
+    # Add filter for setup types
+    setup_filter = st.multiselect(
+        "Filter by Setup Type:",
+        ["Potential Long", "Watch Long", "Potential Short", "Watch Short", "None", "Conflicting"],
+        default=["Potential Long", "Watch Long", "Potential Short", "Watch Short"]
     )
+    
+    if setup_filter:
+        # Extract setup type from HTML for filtering
+        setup_series = df_display["Setup"].str.extract(r'>([^<]+)<')
+        filtered_df = df_display[setup_series[0].isin(setup_filter)]
+    else:
+        filtered_df = df_display
+        
+    if filtered_df.empty:
+        st.info("No results match the selected filter criteria.")
+        return None
+        
+    # Display with rich HTML formatting
+    st.markdown('<div class="stDataFrame">', unsafe_allow_html=True)
+    st.write(
+        filtered_df.to_html(
+            escape=False,  # Allow HTML in cells
+            index=False,
+            classes="dataframe",
+            border=0
+        ),
+        unsafe_allow_html=True
+    )
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    return df_display
-
-
-def display_detailed_charts(result):
-    st.header(f"Detailed Analysis: {result['name']} ({result['ticker']})")
-    setup_class = ""
-    if "Long" in result['Setup']: setup_class = "setup-long"
-    elif "Short" in result['Setup']: setup_class = "setup-short"
-    if "Watch" in result['Setup']: setup_class += " setup-watch"
-    st.subheader(f"Detected Setup: <span class='{setup_class.strip()}'>{result['Setup']}</span> (Score: {result['Score']})", unsafe_allow_html=True)
-    st.caption(f"Rules Met: {result['Rules Met']}")
-    st.markdown("---")
-    
-    data_conditions = result.get('_data_conditions')
-    data_entry = result.get('_data_entry')
-    
-    if data_conditions is None or data_entry is None:
-        st.error("Chart data not available.")
-        return
-    
-    # Limit data points for better performance
-    data_conditions = data_conditions.iloc[-52:] if len(data_conditions) > 52 else data_conditions
-    data_entry = data_entry.iloc[-120:] if len(data_entry) > 120 else data_entry
-    
-    # Weekly Chart with spinner for feedback
-    with st.spinner("Generating weekly chart..."):
-        fig_w = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.03, 
-                            row_heights=[0.6, 0.2, 0.2], 
-                            subplot_titles=(f"{TF_CONDITIONS} Price & EMAs", f"{TF_CONDITIONS} RSI ({RSI_WINDOW})", f"{TF_CONDITIONS} MACD"))
-        
-        fig_w.add_trace(go.Candlestick(x=data_conditions.index, 
-                                      open=data_conditions['Open'], 
-                                      high=data_conditions['High'], 
-                                      low=data_conditions['Low'], 
-                                      close=data_conditions['Close'], 
-                                      name="Price"), 
-                       row=1, col=1)
-        
-        fig_w.add_trace(go.Scatter(x=data_conditions.index, 
-                                  y=data_conditions.get(f'EMA_{EMA_SHORT}'), 
-                                  name=f"EMA {EMA_SHORT}", 
-                                  line=dict(color='cyan', width=1)), 
-                       row=1, col=1)
-        
-        fig_w.add_trace(go.Scatter(x=data_conditions.index, 
-                                  y=data_conditions.get(f'EMA_{EMA_LONG}'), 
-                                  name=f"EMA {EMA_LONG}", 
-                                  line=dict(color='magenta', width=1)), 
-                       row=1, col=1)
-        
-        fig_w.add_trace(go.Scatter(x=data_conditions.index, 
-                                  y=data_conditions.get(f'RSI_{RSI_WINDOW}'), 
-                                  name="RSI", 
-                                  line=dict(color='orange')), 
-                       row=2, col=1)
-        
-        fig_w.add_hline(y=RSI_MID, line_dash="dash", line_color="grey", row=2, col=1)
-        
-        macd_hist = data_conditions.get(f"MACDh_{MACD_FAST}_{MACD_SLOW}_{MACD_SIGNAL}", [])
-        colors_w = ['green' if val >= 0 else 'red' for val in macd_hist]
-        
-        fig_w.add_trace(go.Bar(x=data_conditions.index, 
-                              y=macd_hist, 
-                              name='Hist', 
-                              marker_color=colors_w), 
-                       row=3, col=1)
-        
-        fig_w.add_trace(go.Scatter(x=data_conditions.index, 
-                                  y=data_conditions.get(f"MACD_{MACD_FAST}_{MACD_SLOW}_{MACD_SIGNAL}"), 
-                                  name="MACD", 
-                                  line=dict(color="blue")), 
-                       row=3, col=1)
-        
-        fig_w.add_trace(go.Scatter(x=data_conditions.index, 
-                                  y=data_conditions.get(f"MACDs_{MACD_FAST}_{MACD_SLOW}_{MACD_SIGNAL}"), 
-                                  name="Signal", 
-                                  line=dict(color="red")), 
-                       row=3, col=1)
-        
-        fig_w.update_layout(
-            title=f"Weekly ({TF_CONDITIONS}) Chart - Market Conditions", 
-            height=600, 
-            xaxis_rangeslider_visible=False,
-            showlegend=False
-        )
-        
-        fig_w.update_yaxes(range=[0, 100], row=2, col=1)
-        
-        st.plotly_chart(fig_w, use_container_width=True)
-    
-    st.markdown("---")
-    
-    # Daily Chart with spinner for feedback
-    with st.spinner("Generating daily chart..."):
-        fig_d = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.03, 
-                            row_heights=[0.6, 0.2, 0.2], 
-                            subplot_titles=(f"{TF_ENTRY} Price & EMAs", f"{TF_ENTRY} RSI ({RSI_WINDOW})", f"{TF_ENTRY} MACD"))
-        
-        fig_d.add_trace(go.Candlestick(x=data_entry.index, 
-                                      open=data_entry['Open'], 
-                                      high=data_entry['High'], 
-                                      low=data_entry['Low'], 
-                                      close=data_entry['Close'], 
-                                      name="Price"), 
-                       row=1, col=1)
-        
-        fig_d.add_trace(go.Scatter(x=data_entry.index, 
-                                  y=data_entry.get(f'EMA_{EMA_SHORT}'), 
-                                  name=f"EMA {EMA_SHORT}", 
-                                  line=dict(color='cyan', width=1)), 
-                       row=1, col=1)
-        
-        fig_d.add_trace(go.Scatter(x=data_entry.index, 
-                                  y=data_entry.get(f'EMA_{EMA_LONG}'), 
-                                  name=f"EMA {EMA_LONG}", 
-                                  line=dict(color='magenta', width=1)), 
-                       row=1, col=1)
-        
-        fig_d.add_trace(go.Scatter(x=data_entry.index, 
-                                  y=data_entry.get(f'RSI_{RSI_WINDOW}'), 
-                                  name="RSI", 
-                                  line=dict(color='orange')), 
-                       row=2, col=1)
-        
-        fig_d.add_hline(y=RSI_MID, line_dash="dash", line_color="grey", row=2, col=1)
-        
-        macd_hist_d = data_entry.get(f"MACDh_{MACD_FAST}_{MACD_SLOW}_{MACD_SIGNAL}", [])
-        colors_d = ['green' if val >= 0 else 'red' for val in macd_hist_d]
-        
-        fig_d.add_trace(go.Bar(x=data_entry.index, 
-                              y=macd_hist_d, 
-                              name='Hist', 
-                              marker_color=colors_d), 
-                       row=3, col=1)
-        
-        fig_d.add_trace(go.Scatter(x=data_entry.index, 
-                                  y=data_entry.get(f"MACD_{MACD_FAST}_{MACD_SLOW}_{MACD_SIGNAL}"), 
-                                  name="MACD", 
-                                  line=dict(color="blue")), 
-                       row=3, col=1)
-        
-        fig_d.add_trace(go.Scatter(x=data_entry.index, 
-                                  y=data_entry.get(f"MACDs_{MACD_FAST}_{MACD_SLOW}_{MACD_SIGNAL}"), 
-                                  name="Signal", 
-                                  line=dict(color="red")), 
-                       row=3, col=1)
-        
-        fig_d.update_layout(
-            title=f"Daily ({TF_ENTRY}) Chart - Entry Criteria", 
-            height=600, 
-            xaxis_rangeslider_visible=False,
-            showlegend=False
-        )
-        
-        fig_d.update_yaxes(range=[0, 100], row=2, col=1)
-        
-        st.plotly_chart(fig_d, use_container_width=True)
+    return filtered_df
 
 
 # --- Main App Flow ---
 def main():
     st.title("🎯 I Chart Daily Strategy Setup Scanner")
+    
     with st.expander("📖 Strategy Criteria Explained"):
         st.markdown(f"""
         This scanner identifies potential trading setups based on the "I Chart Daily" multi-timeframe momentum strategy.
@@ -446,13 +485,24 @@ def main():
         *   `Potential Long/Short`: All Weekly conditions met + ≥{MIN_ENTRY_RULES_MET} Daily rules met. (Score +4 to +6 / -4 to -6).
         *   `Watch Long/Short`: All Weekly conditions met, but <{MIN_ENTRY_RULES_MET} Daily rules met. (Score +3 / -3).
         *   `None/Error`: Criteria not met or data issues (Score 0).
+        
+        **Columns Legend:**
+        * **W_RSI**: Weekly RSI value (Bullish >50, Bearish <50)
+        * **W_MACD**: Weekly MACD value (Bullish when MACD > Signal, Bearish when MACD < Signal)
+        * **W_Price_EMA**: Weekly Price relative to EMA{EMA_LONG}
+        * **D_RSI**: Daily RSI value (Bullish >50, Bearish <50)
+        * **D_MACD**: Daily MACD value (Bullish when MACD > Signal, Bearish when MACD < Signal)
+        * **D_Price_EMA**: Daily Price relative to both EMAs
+        
+        **Cell Colors:**
+        * <span class="bullish">Green</span>: Bullish signal
+        * <span class="bearish">Red</span>: Bearish signal
+        * <span class="neutral">Gray</span>: Neutral signal
         """)
         
     # Initialize session state variables
     if 'scan_results' not in st.session_state:
         st.session_state.scan_results = []
-    if 'selected_instrument_index' not in st.session_state:
-        st.session_state.selected_instrument_index = None
 
     # Sidebar controls
     st.sidebar.title("Scan Settings")
@@ -464,7 +514,7 @@ def main():
     )
     
     tickers_to_scan = {}
-    max_tickers = 25  # Default maximum for performance
+    max_tickers = 40  # Default maximum
     
     if scan_option == "Select Categories":
         available_categories = list(TICKER_CATEGORIES.keys())
@@ -498,92 +548,38 @@ def main():
         else:
             st.sidebar.warning("Please enter at least one ticker.")
     
-    else:  # All Categories - but with warnings and limits
-        st.sidebar.warning("Scanning all tickers may take a long time. Consider selecting specific categories instead.")
-        sample_categories = list(TICKER_CATEGORIES.keys())[:2]  # Just take first 2 categories for performance
-        for cat in sample_categories:
+    else:  # All Categories
+        for cat in TICKER_CATEGORIES.keys():
             tickers_to_scan.update(TICKER_CATEGORIES.get(cat, {}))
-        st.sidebar.info(f"For performance, limiting to {len(tickers_to_scan)} tickers from {', '.join(sample_categories)} categories.")
-    
-    # Custom max ticker input
-    custom_max = st.sidebar.number_input("Maximum tickers to scan:", min_value=1, max_value=100, value=max_tickers)
-    max_tickers = custom_max if custom_max else max_tickers
     
     # Scan button
     if st.sidebar.button("▶️ Run Scan", use_container_width=True, type="primary", disabled=(len(tickers_to_scan) == 0)):
-        with st.spinner(f"Scanning up to {max_tickers} tickers..."):
+        with st.spinner(f"Scanning tickers (max {max_tickers})..."):
             st.session_state.scan_results = scan_tickers(tickers_to_scan, max_tickers)
-            st.session_state.selected_instrument_index = None
     
     st.sidebar.markdown("---")
     st.sidebar.caption(f"Strategy uses {TF_CONDITIONS} conditions / {TF_ENTRY} entries.")
 
-    # Tabs
-    tab_dashboard, tab_details = st.tabs(["🔎 Scan Results", "📈 Detailed Charts"])
+    # Main Results Display
+    st.header("Scan Results Dashboard")
     
-    with tab_dashboard:
-        st.header("Scan Results Dashboard")
+    if not st.session_state.scan_results:
+        st.info("Click 'Run Scan' in the sidebar to start.")
+    else:
+        valid_results = [r for r in st.session_state.scan_results if not r.get('error', True)]
         
-        if not st.session_state.scan_results:
-            st.info("Click 'Run Scan' in the sidebar to start.")
+        if not valid_results:
+            st.warning("Scan complete, but no valid results were found. Try different tickers.")
         else:
-            displayable_results = [r for r in st.session_state.scan_results 
-                                  if r['Setup'] not in ["Error", "None", "Calc Error", "Data Error", "Conflicting"]]
+            active_setups = [r for r in valid_results if r['Setup'] not in ["None", "Conflicting"]]
             
-            if not displayable_results:
-                st.success("Scan complete. No active Long/Short/Watch setups found.")
+            if active_setups:
+                st.success(f"Scan complete. Found {len(active_setups)} potential setups out of {len(valid_results)} valid instruments.")
             else:
-                st.success(f"Scan complete. Found {len(displayable_results)} potential setups or watchlist candidates.")
-                
-                # Use the optimized display function
-                displayed_df = display_results_table(st.session_state.scan_results)
-                
-                if displayed_df is not None and not displayed_df.empty:
-                    st.markdown("---")
-                    st.write("Select an instrument from the table above for detailed charts:")
-                    
-                    # Use selectbox for instrument selection
-                    selected_name = st.selectbox(
-                        "Instrument Name:",
-                        options=displayed_df["Name"].tolist(),
-                        index=0,
-                        key="detail_select_dashboard"
-                    )
-                    
-                    if st.button("Show Detailed Charts"):
-                        try:
-                            selected_row_df = displayed_df[displayed_df["Name"] == selected_name].iloc[0]
-                            original_idx = int(selected_row_df["_original_index"])
-                            
-                            if 0 <= original_idx < len(st.session_state.scan_results):
-                                st.session_state.selected_instrument_index = original_idx
-                                st.info("Switch to 'Detailed Charts' tab to view analysis.")
-                            else:
-                                st.error("Error linking selection.")
-                        except Exception as e:
-                            st.error(f"Error selecting instrument: {str(e)}")
-    
-    with tab_details:
-        st.header("Detailed Instrument Analysis")
-        
-        if st.session_state.selected_instrument_index is not None:
-            try:
-                if 0 <= st.session_state.selected_instrument_index < len(st.session_state.scan_results):
-                    selected_result_data = st.session_state.scan_results[st.session_state.selected_instrument_index]
-                    
-                    if st.button("← Back / Clear Selection"):
-                        st.session_state.selected_instrument_index = None
-                        st.rerun()
-                    else:
-                        display_detailed_charts(selected_result_data)
-                else:
-                    st.warning("Invalid selection index.")
-                    st.session_state.selected_instrument_index = None
-            except Exception as e:
-                st.error(f"Error displaying charts: {str(e)}")
-                st.session_state.selected_instrument_index = None
-        else:
-            st.info("Select an instrument from 'Scan Results' and click 'Show Detailed Charts'.")
+                st.info(f"Scan complete. No active setups found among {len(valid_results)} valid instruments.")
+            
+            # Display results table with all metrics
+            display_results_table(st.session_state.scan_results)
 
 if __name__ == "__main__":
     try:
