@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import pandas_ta as ta # Essential for indicator calculation
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import time
 
 # Import ticker categories (keep using your tickers.py)
 from tickers import TICKER_CATEGORIES
@@ -55,7 +56,6 @@ st.markdown("""
 
 @st.cache_data(ttl=1800) # Cache for 30 minutes
 def fetch_strategy_data(ticker):
-    # ... (fetch_strategy_data function remains the same) ...
     try:
         ticker_obj = yf.Ticker(ticker)
         data_conditions = ticker_obj.history(period=PERIOD_CONDITIONS, interval=TF_CONDITIONS)
@@ -67,28 +67,31 @@ def fetch_strategy_data(ticker):
             return None, None
         return data_conditions, data_entry
     except Exception as e:
+        st.error(f"Error fetching data for {ticker}: {str(e)}")
         return None, None
 
 
 def calculate_strategy_indicators(data):
-    # ... (calculate_strategy_indicators function remains the same) ...
-    if data is None or data.empty: return None
+    if data is None or data.empty: return None, None
     try:
-        data.ta.ema(length=EMA_SHORT, append=True, col_names=(f"EMA_{EMA_SHORT}",))
-        data.ta.ema(length=EMA_LONG, append=True, col_names=(f"EMA_{EMA_LONG}",))
-        data.ta.rsi(length=RSI_WINDOW, append=True, col_names=(f"RSI_{RSI_WINDOW}",))
-        data.ta.macd(fast=MACD_FAST, slow=MACD_SLOW, signal=MACD_SIGNAL, append=True,
+        # Create a copy of the data to avoid SettingWithCopyWarning
+        data_copy = data.copy()
+        
+        data_copy.ta.ema(length=EMA_SHORT, append=True, col_names=(f"EMA_{EMA_SHORT}",))
+        data_copy.ta.ema(length=EMA_LONG, append=True, col_names=(f"EMA_{EMA_LONG}",))
+        data_copy.ta.rsi(length=RSI_WINDOW, append=True, col_names=(f"RSI_{RSI_WINDOW}",))
+        data_copy.ta.macd(fast=MACD_FAST, slow=MACD_SLOW, signal=MACD_SIGNAL, append=True,
                     col_names=(f"MACD_{MACD_FAST}_{MACD_SLOW}_{MACD_SIGNAL}",
                                f"MACDh_{MACD_FAST}_{MACD_SLOW}_{MACD_SIGNAL}",
                                f"MACDs_{MACD_FAST}_{MACD_SLOW}_{MACD_SIGNAL}"))
         indicators = {}
-        indicators['Close'] = data['Close'].iloc[-1]
-        indicators[f'EMA_{EMA_SHORT}'] = data[f'EMA_{EMA_SHORT}'].iloc[-1]
-        indicators[f'EMA_{EMA_LONG}'] = data[f'EMA_{EMA_LONG}'].iloc[-1]
-        indicators[f'RSI_{RSI_WINDOW}'] = data[f'RSI_{RSI_WINDOW}'].iloc[-1]
-        indicators[f'MACD_Line'] = data[f"MACD_{MACD_FAST}_{MACD_SLOW}_{MACD_SIGNAL}"].iloc[-1]
-        indicators[f'MACD_Signal'] = data[f"MACDs_{MACD_FAST}_{MACD_SLOW}_{MACD_SIGNAL}"].iloc[-1]
-        indicators[f'MACD_Hist'] = data[f"MACDh_{MACD_FAST}_{MACD_SLOW}_{MACD_SIGNAL}"].iloc[-1]
+        indicators['Close'] = data_copy['Close'].iloc[-1]
+        indicators[f'EMA_{EMA_SHORT}'] = data_copy[f'EMA_{EMA_SHORT}'].iloc[-1]
+        indicators[f'EMA_{EMA_LONG}'] = data_copy[f'EMA_{EMA_LONG}'].iloc[-1]
+        indicators[f'RSI_{RSI_WINDOW}'] = data_copy[f'RSI_{RSI_WINDOW}'].iloc[-1]
+        indicators[f'MACD_Line'] = data_copy[f"MACD_{MACD_FAST}_{MACD_SLOW}_{MACD_SIGNAL}"].iloc[-1]
+        indicators[f'MACD_Signal'] = data_copy[f"MACDs_{MACD_FAST}_{MACD_SLOW}_{MACD_SIGNAL}"].iloc[-1]
+        indicators[f'MACD_Hist'] = data_copy[f"MACDh_{MACD_FAST}_{MACD_SLOW}_{MACD_SIGNAL}"].iloc[-1]
         # --- Derived Boolean States ---
         indicators['RSI_Bullish'] = indicators[f'RSI_{RSI_WINDOW}'] > RSI_MID
         indicators['RSI_Bearish'] = indicators[f'RSI_{RSI_WINDOW}'] < RSI_MID
@@ -101,13 +104,13 @@ def calculate_strategy_indicators(data):
         # Combined daily price check helper
         indicators['Daily_Price_Structure_Long'] = indicators['Price_Above_EMA_Short'] and indicators['Price_Above_EMA_Long']
         indicators['Daily_Price_Structure_Short'] = indicators['Price_Below_EMA_Short'] and indicators['Price_Below_EMA_Long']
-        return indicators, data
+        return indicators, data_copy
     except Exception as e:
+        st.error(f"Error calculating indicators: {str(e)}")
         return None, None
 
 
 def check_strategy_setup(conditions_indicators, entry_indicators):
-    # ... (check_strategy_setup function remains the same - scoring logic is unchanged) ...
     if not conditions_indicators or not entry_indicators: return "Error", 0, []
     setup_long_status = "None"; positive_score = 0; rules_met_long_details = []
     setup_short_status = "None"; negative_score_magnitude = 0; rules_met_short_details = []
@@ -148,139 +151,284 @@ def check_strategy_setup(conditions_indicators, entry_indicators):
     return final_setup, final_score, final_rules
 
 
-def scan_tickers(tickers_dict):
-    # ... (scan_tickers function remains the same) ...
+def scan_tickers(tickers_dict, max_tickers=25):
+    """Scan tickers with a maximum limit for performance"""
+    # Limit the number of tickers to scan
+    if len(tickers_dict) > max_tickers:
+        st.warning(f"Limiting scan to {max_tickers} tickers for performance. Use specific categories or tickers for more focused results.")
+        limited_tickers = dict(list(tickers_dict.items())[:max_tickers])
+    else:
+        limited_tickers = tickers_dict
+    
     results = []
-    total_tickers = len(tickers_dict)
+    total_tickers = len(limited_tickers)
     progress_bar = st.progress(0)
     status_text = st.empty()
-    for i, (ticker, name) in enumerate(tickers_dict.items()):
-        status_text.text(f"Scanning {i+1}/{total_tickers}: {name} ({ticker})...")
-        data_conditions, data_entry = fetch_strategy_data(ticker)
-        if data_conditions is None or data_entry is None:
-            results.append({"ticker": ticker, "name": name, "Setup": "Data Error", "Score": 0, "Rules Met": [], "error": True})
-            progress_bar.progress((i + 1) / total_tickers); continue
-        conditions_indicators, data_conditions_with_indicators = calculate_strategy_indicators(data_conditions)
-        entry_indicators, data_entry_with_indicators = calculate_strategy_indicators(data_entry)
-        if conditions_indicators is None or entry_indicators is None:
-            results.append({"ticker": ticker, "name": name, "Setup": "Calc Error", "Score": 0, "Rules Met": [], "error": True})
-            progress_bar.progress((i + 1) / total_tickers); continue
-        setup_type, setup_score, rules_met = check_strategy_setup(conditions_indicators, entry_indicators)
-        results.append({
-            "ticker": ticker, "name": name, "Setup": setup_type, "Score": setup_score,
-            "Rules Met": ", ".join(rules_met), "error": False,
-            "_data_conditions": data_conditions_with_indicators, "_data_entry": data_entry_with_indicators,
-            "_indicators_conditions": conditions_indicators, "_indicators_entry": entry_indicators,
-        })
-        progress_bar.progress((i + 1) / total_tickers)
-    status_text.text(f"Scan Complete: {total_tickers} tickers analyzed.")
+    
+    # Update progress less frequently to reduce UI overhead
+    update_frequency = max(1, min(5, total_tickers // 10))
+    
+    try:
+        for i, (ticker, name) in enumerate(limited_tickers.items()):
+            # Only update UI at specific intervals
+            if i % update_frequency == 0 or i == total_tickers - 1:
+                status_text.text(f"Scanning {i+1}/{total_tickers}: {name} ({ticker})...")
+                progress_bar.progress((i + 1) / total_tickers)
+            
+            try:
+                data_conditions, data_entry = fetch_strategy_data(ticker)
+                if data_conditions is None or data_entry is None:
+                    results.append({"ticker": ticker, "name": name, "Setup": "Data Error", "Score": 0, "Rules Met": [], "error": True})
+                    continue
+                    
+                conditions_indicators, data_conditions_with_indicators = calculate_strategy_indicators(data_conditions)
+                entry_indicators, data_entry_with_indicators = calculate_strategy_indicators(data_entry)
+                if conditions_indicators is None or entry_indicators is None:
+                    results.append({"ticker": ticker, "name": name, "Setup": "Calc Error", "Score": 0, "Rules Met": [], "error": True})
+                    continue
+                    
+                setup_type, setup_score, rules_met = check_strategy_setup(conditions_indicators, entry_indicators)
+                results.append({
+                    "ticker": ticker, "name": name, "Setup": setup_type, "Score": setup_score,
+                    "Rules Met": ", ".join(rules_met), "error": False,
+                    "_data_conditions": data_conditions_with_indicators, "_data_entry": data_entry_with_indicators,
+                    "_indicators_conditions": conditions_indicators, "_indicators_entry": entry_indicators,
+                })
+                
+                # Small delay to prevent API rate limits and reduce resource usage
+                time.sleep(0.1)
+                
+            except Exception as e:
+                results.append({"ticker": ticker, "name": name, "Setup": "Error", "Score": 0, "Rules Met": [f"Error: {str(e)}"], "error": True})
+    
+    except Exception as e:
+        st.error(f"Error during scanning: {str(e)}")
+    finally:
+        status_text.text(f"Scan Complete: {len(results)} tickers analyzed.")
+        
     return results
 
-# --- MODIFIED display_results_table ---
+
 def display_results_table(results_list):
     """Displays the filtered scan results with basic info, using HTML for Setup styling."""
     if not results_list:
         st.warning("No results to display.")
         return None
 
+    # Filter out errors and 'None' setups
+    filtered_results = [r for r in results_list if r['Setup'] not in ["Error", "None", "Calc Error", "Data Error", "Conflicting"]]
+    
+    if not filtered_results:
+        st.info("No potential Long/Short/Watch setups found matching the criteria.")
+        return None
+
+    # Use Streamlit's native dataframe for better performance
     df_data = []
-
-    for i, r in enumerate(results_list):
-         # Filter out errors and 'None' setups for the main display table
-        if r['Setup'] in ["Error", "None", "Calc Error", "Conflicting"]: continue
-
+    
+    for i, r in enumerate(filtered_results):
         # Define setup class based on the setup type
         setup_class = ""
         if "Long" in r['Setup']: setup_class = "setup-long"
         elif "Short" in r['Setup']: setup_class = "setup-short"
         if "Watch" in r['Setup']: setup_class += " setup-watch" # Combine if needed
 
-        setup_html = f"<span class='{setup_class.strip()}'>{r['Setup']}</span>"
-
         df_data.append({
             "Name": r["name"],
-            # "Ticker": r["ticker"], # Excluded as requested
-            "Setup": setup_html, # Rendered HTML for Setup Type
-            "Score": r["Score"], # Positive for Long, negative for Short
-             "_original_index": i # Link back to the full results list
+            "Setup": r["Setup"], 
+            "Score": r["Score"],
+            "_original_index": results_list.index(r) # Link back to the full results list
         })
 
-    if not df_data:
-        st.info("No potential Long/Short/Watch setups found matching the criteria.")
-        return None
-
     df_display = pd.DataFrame(df_data)
-
+    
     # Default sort: High positive scores first (best Longs), then low negative scores (best Shorts)
     df_display = df_display.sort_values(by="Score", ascending=False).reset_index(drop=True)
 
-    # --- Display Logic ---
-    st.markdown('<div class="dataframe-container">', unsafe_allow_html=True)
-    # Render HTML table using st.write, keeping it simple
-    st.write(
-        df_display.drop(columns=['_original_index']).to_html( # Hide internal index from final HTML
-            escape=False, # IMPORTANT: Allows Setup HTML rendering
-            index=False,
-            justify='center', # Center headers
-            classes="dataframe", # Add class for potential future styling
-            border=0 # Remove default border
-        ),
-        unsafe_allow_html=True
+    # Use Streamlit's native dataframe display
+    st.dataframe(
+        df_display.drop(columns=['_original_index']),
+        use_container_width=True,
+        column_config={
+            "Name": st.column_config.TextColumn(
+                "Name",
+                width="medium"
+            ),
+            "Setup": st.column_config.TextColumn(
+                "Setup",
+                width="medium"
+            ),
+            "Score": st.column_config.NumberColumn(
+                "Score",
+                format="%d",
+                width="small"
+            )
+        },
+        hide_index=True
     )
-    st.markdown('</div>', unsafe_allow_html=True)
 
-    # Return the dataframe containing the _original_index for selection logic
     return df_display
 
 
-# --- Detailed Charts Function (remains the same) ---
 def display_detailed_charts(result):
-    # ... (display_detailed_charts function remains the same) ...
     st.header(f"Detailed Analysis: {result['name']} ({result['ticker']})")
-    setup_class = "";
+    setup_class = ""
     if "Long" in result['Setup']: setup_class = "setup-long"
     elif "Short" in result['Setup']: setup_class = "setup-short"
     if "Watch" in result['Setup']: setup_class += " setup-watch"
     st.subheader(f"Detected Setup: <span class='{setup_class.strip()}'>{result['Setup']}</span> (Score: {result['Score']})", unsafe_allow_html=True)
     st.caption(f"Rules Met: {result['Rules Met']}")
     st.markdown("---")
-    data_conditions = result.get('_data_conditions'); data_entry = result.get('_data_entry')
-    if data_conditions is None or data_entry is None: st.error("Chart data not available."); return
-    # Weekly Chart (copy/paste from previous version)
-    fig_w = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.03, row_heights=[0.6, 0.2, 0.2], subplot_titles=(f"{TF_CONDITIONS} Price & EMAs", f"{TF_CONDITIONS} RSI ({RSI_WINDOW})", f"{TF_CONDITIONS} MACD"))
-    fig_w.add_trace(go.Candlestick(x=data_conditions.index, open=data_conditions['Open'], high=data_conditions['High'], low=data_conditions['Low'], close=data_conditions['Close'], name="Price"), row=1, col=1)
-    fig_w.add_trace(go.Scatter(x=data_conditions.index, y=data_conditions.get(f'EMA_{EMA_SHORT}'), name=f"EMA {EMA_SHORT}", line=dict(color='cyan', width=1)), row=1, col=1)
-    fig_w.add_trace(go.Scatter(x=data_conditions.index, y=data_conditions.get(f'EMA_{EMA_LONG}'), name=f"EMA {EMA_LONG}", line=dict(color='magenta', width=1)), row=1, col=1)
-    fig_w.add_trace(go.Scatter(x=data_conditions.index, y=data_conditions.get(f'RSI_{RSI_WINDOW}'), name="RSI", line=dict(color='orange')), row=2, col=1)
-    fig_w.add_hline(y=RSI_MID, line_dash="dash", line_color="grey", row=2, col=1)
-    colors_w = ['green' if val >= 0 else 'red' for val in data_conditions.get(f"MACDh_{MACD_FAST}_{MACD_SLOW}_{MACD_SIGNAL}", [])]
-    fig_w.add_trace(go.Bar(x=data_conditions.index, y=data_conditions.get(f"MACDh_{MACD_FAST}_{MACD_SLOW}_{MACD_SIGNAL}"), name='Hist', marker_color=colors_w), row=3, col=1)
-    fig_w.add_trace(go.Scatter(x=data_conditions.index, y=data_conditions.get(f"MACD_{MACD_FAST}_{MACD_SLOW}_{MACD_SIGNAL}"), name="MACD", line=dict(color="blue")), row=3, col=1)
-    fig_w.add_trace(go.Scatter(x=data_conditions.index, y=data_conditions.get(f"MACDs_{MACD_FAST}_{MACD_SLOW}_{MACD_SIGNAL}"), name="Signal", line=dict(color="red")), row=3, col=1)
-    fig_w.update_layout(title=f"Weekly ({TF_CONDITIONS}) Chart - Market Conditions", height=600, xaxis_rangeslider_visible=False, showlegend=False); fig_w.update_yaxes(range=[0, 100], row=2, col=1)
-    st.plotly_chart(fig_w, use_container_width=True)
+    
+    data_conditions = result.get('_data_conditions')
+    data_entry = result.get('_data_entry')
+    
+    if data_conditions is None or data_entry is None:
+        st.error("Chart data not available.")
+        return
+    
+    # Limit data points for better performance
+    data_conditions = data_conditions.iloc[-52:] if len(data_conditions) > 52 else data_conditions
+    data_entry = data_entry.iloc[-120:] if len(data_entry) > 120 else data_entry
+    
+    # Weekly Chart with spinner for feedback
+    with st.spinner("Generating weekly chart..."):
+        fig_w = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.03, 
+                            row_heights=[0.6, 0.2, 0.2], 
+                            subplot_titles=(f"{TF_CONDITIONS} Price & EMAs", f"{TF_CONDITIONS} RSI ({RSI_WINDOW})", f"{TF_CONDITIONS} MACD"))
+        
+        fig_w.add_trace(go.Candlestick(x=data_conditions.index, 
+                                      open=data_conditions['Open'], 
+                                      high=data_conditions['High'], 
+                                      low=data_conditions['Low'], 
+                                      close=data_conditions['Close'], 
+                                      name="Price"), 
+                       row=1, col=1)
+        
+        fig_w.add_trace(go.Scatter(x=data_conditions.index, 
+                                  y=data_conditions.get(f'EMA_{EMA_SHORT}'), 
+                                  name=f"EMA {EMA_SHORT}", 
+                                  line=dict(color='cyan', width=1)), 
+                       row=1, col=1)
+        
+        fig_w.add_trace(go.Scatter(x=data_conditions.index, 
+                                  y=data_conditions.get(f'EMA_{EMA_LONG}'), 
+                                  name=f"EMA {EMA_LONG}", 
+                                  line=dict(color='magenta', width=1)), 
+                       row=1, col=1)
+        
+        fig_w.add_trace(go.Scatter(x=data_conditions.index, 
+                                  y=data_conditions.get(f'RSI_{RSI_WINDOW}'), 
+                                  name="RSI", 
+                                  line=dict(color='orange')), 
+                       row=2, col=1)
+        
+        fig_w.add_hline(y=RSI_MID, line_dash="dash", line_color="grey", row=2, col=1)
+        
+        macd_hist = data_conditions.get(f"MACDh_{MACD_FAST}_{MACD_SLOW}_{MACD_SIGNAL}", [])
+        colors_w = ['green' if val >= 0 else 'red' for val in macd_hist]
+        
+        fig_w.add_trace(go.Bar(x=data_conditions.index, 
+                              y=macd_hist, 
+                              name='Hist', 
+                              marker_color=colors_w), 
+                       row=3, col=1)
+        
+        fig_w.add_trace(go.Scatter(x=data_conditions.index, 
+                                  y=data_conditions.get(f"MACD_{MACD_FAST}_{MACD_SLOW}_{MACD_SIGNAL}"), 
+                                  name="MACD", 
+                                  line=dict(color="blue")), 
+                       row=3, col=1)
+        
+        fig_w.add_trace(go.Scatter(x=data_conditions.index, 
+                                  y=data_conditions.get(f"MACDs_{MACD_FAST}_{MACD_SLOW}_{MACD_SIGNAL}"), 
+                                  name="Signal", 
+                                  line=dict(color="red")), 
+                       row=3, col=1)
+        
+        fig_w.update_layout(
+            title=f"Weekly ({TF_CONDITIONS}) Chart - Market Conditions", 
+            height=600, 
+            xaxis_rangeslider_visible=False,
+            showlegend=False
+        )
+        
+        fig_w.update_yaxes(range=[0, 100], row=2, col=1)
+        
+        st.plotly_chart(fig_w, use_container_width=True)
+    
     st.markdown("---")
-    # Daily Chart (copy/paste from previous version)
-    fig_d = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.03, row_heights=[0.6, 0.2, 0.2], subplot_titles=(f"{TF_ENTRY} Price & EMAs", f"{TF_ENTRY} RSI ({RSI_WINDOW})", f"{TF_ENTRY} MACD"))
-    fig_d.add_trace(go.Candlestick(x=data_entry.index, open=data_entry['Open'], high=data_entry['High'], low=data_entry['Low'], close=data_entry['Close'], name="Price"), row=1, col=1)
-    fig_d.add_trace(go.Scatter(x=data_entry.index, y=data_entry.get(f'EMA_{EMA_SHORT}'), name=f"EMA {EMA_SHORT}", line=dict(color='cyan', width=1)), row=1, col=1)
-    fig_d.add_trace(go.Scatter(x=data_entry.index, y=data_entry.get(f'EMA_{EMA_LONG}'), name=f"EMA {EMA_LONG}", line=dict(color='magenta', width=1)), row=1, col=1)
-    fig_d.add_trace(go.Scatter(x=data_entry.index, y=data_entry.get(f'RSI_{RSI_WINDOW}'), name="RSI", line=dict(color='orange')), row=2, col=1)
-    fig_d.add_hline(y=RSI_MID, line_dash="dash", line_color="grey", row=2, col=1)
-    colors_d = ['green' if val >= 0 else 'red' for val in data_entry.get(f"MACDh_{MACD_FAST}_{MACD_SLOW}_{MACD_SIGNAL}", [])]
-    fig_d.add_trace(go.Bar(x=data_entry.index, y=data_entry.get(f"MACDh_{MACD_FAST}_{MACD_SLOW}_{MACD_SIGNAL}"), name='Hist', marker_color=colors_d), row=3, col=1)
-    fig_d.add_trace(go.Scatter(x=data_entry.index, y=data_entry.get(f"MACD_{MACD_FAST}_{MACD_SLOW}_{MACD_SIGNAL}"), name="MACD", line=dict(color="blue")), row=3, col=1)
-    fig_d.add_trace(go.Scatter(x=data_entry.index, y=data_entry.get(f"MACDs_{MACD_FAST}_{MACD_SLOW}_{MACD_SIGNAL}"), name="Signal", line=dict(color="red")), row=3, col=1)
-    fig_d.update_layout(title=f"Daily ({TF_ENTRY}) Chart - Entry Criteria", height=600, xaxis_rangeslider_visible=False, showlegend=False); fig_d.update_yaxes(range=[0, 100], row=2, col=1)
-    st.plotly_chart(fig_d, use_container_width=True)
+    
+    # Daily Chart with spinner for feedback
+    with st.spinner("Generating daily chart..."):
+        fig_d = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.03, 
+                            row_heights=[0.6, 0.2, 0.2], 
+                            subplot_titles=(f"{TF_ENTRY} Price & EMAs", f"{TF_ENTRY} RSI ({RSI_WINDOW})", f"{TF_ENTRY} MACD"))
+        
+        fig_d.add_trace(go.Candlestick(x=data_entry.index, 
+                                      open=data_entry['Open'], 
+                                      high=data_entry['High'], 
+                                      low=data_entry['Low'], 
+                                      close=data_entry['Close'], 
+                                      name="Price"), 
+                       row=1, col=1)
+        
+        fig_d.add_trace(go.Scatter(x=data_entry.index, 
+                                  y=data_entry.get(f'EMA_{EMA_SHORT}'), 
+                                  name=f"EMA {EMA_SHORT}", 
+                                  line=dict(color='cyan', width=1)), 
+                       row=1, col=1)
+        
+        fig_d.add_trace(go.Scatter(x=data_entry.index, 
+                                  y=data_entry.get(f'EMA_{EMA_LONG}'), 
+                                  name=f"EMA {EMA_LONG}", 
+                                  line=dict(color='magenta', width=1)), 
+                       row=1, col=1)
+        
+        fig_d.add_trace(go.Scatter(x=data_entry.index, 
+                                  y=data_entry.get(f'RSI_{RSI_WINDOW}'), 
+                                  name="RSI", 
+                                  line=dict(color='orange')), 
+                       row=2, col=1)
+        
+        fig_d.add_hline(y=RSI_MID, line_dash="dash", line_color="grey", row=2, col=1)
+        
+        macd_hist_d = data_entry.get(f"MACDh_{MACD_FAST}_{MACD_SLOW}_{MACD_SIGNAL}", [])
+        colors_d = ['green' if val >= 0 else 'red' for val in macd_hist_d]
+        
+        fig_d.add_trace(go.Bar(x=data_entry.index, 
+                              y=macd_hist_d, 
+                              name='Hist', 
+                              marker_color=colors_d), 
+                       row=3, col=1)
+        
+        fig_d.add_trace(go.Scatter(x=data_entry.index, 
+                                  y=data_entry.get(f"MACD_{MACD_FAST}_{MACD_SLOW}_{MACD_SIGNAL}"), 
+                                  name="MACD", 
+                                  line=dict(color="blue")), 
+                       row=3, col=1)
+        
+        fig_d.add_trace(go.Scatter(x=data_entry.index, 
+                                  y=data_entry.get(f"MACDs_{MACD_FAST}_{MACD_SLOW}_{MACD_SIGNAL}"), 
+                                  name="Signal", 
+                                  line=dict(color="red")), 
+                       row=3, col=1)
+        
+        fig_d.update_layout(
+            title=f"Daily ({TF_ENTRY}) Chart - Entry Criteria", 
+            height=600, 
+            xaxis_rangeslider_visible=False,
+            showlegend=False
+        )
+        
+        fig_d.update_yaxes(range=[0, 100], row=2, col=1)
+        
+        st.plotly_chart(fig_d, use_container_width=True)
 
 
 # --- Main App Flow ---
 def main():
-    # ... (main function layout remains largely the same, calls modified display_results_table) ...
     st.title("🎯 I Chart Daily Strategy Setup Scanner")
     with st.expander("📖 Strategy Criteria Explained"):
-        # ... (Explainer text remains the same) ...
         st.markdown(f"""
         This scanner identifies potential trading setups based on the "I Chart Daily" multi-timeframe momentum strategy.
 
@@ -299,57 +447,146 @@ def main():
         *   `Watch Long/Short`: All Weekly conditions met, but <{MIN_ENTRY_RULES_MET} Daily rules met. (Score +3 / -3).
         *   `None/Error`: Criteria not met or data issues (Score 0).
         """)
-    if 'scan_results' not in st.session_state: st.session_state.scan_results = []
-    if 'selected_instrument_index' not in st.session_state: st.session_state.selected_instrument_index = None
-    st.sidebar.title("Scan Settings"); scan_option = st.sidebar.radio("Select Tickers To Scan:", ("All Categories", "Select Categories", "Specific Tickers"), index=1, key="scan_option"); tickers_to_scan = {}
+        
+    # Initialize session state variables
+    if 'scan_results' not in st.session_state:
+        st.session_state.scan_results = []
+    if 'selected_instrument_index' not in st.session_state:
+        st.session_state.selected_instrument_index = None
+
+    # Sidebar controls
+    st.sidebar.title("Scan Settings")
+    scan_option = st.sidebar.radio(
+        "Select Tickers To Scan:",
+        ("All Categories", "Select Categories", "Specific Tickers"),
+        index=1,
+        key="scan_option"
+    )
+    
+    tickers_to_scan = {}
+    max_tickers = 25  # Default maximum for performance
+    
     if scan_option == "Select Categories":
-        available_categories = list(TICKER_CATEGORIES.keys()); selected_categories = st.sidebar.multiselect("Categories:", available_categories, default=["INDICES", "COMMODITIES", "FOREX"], key="sel_cats")
+        available_categories = list(TICKER_CATEGORIES.keys())
+        selected_categories = st.sidebar.multiselect(
+            "Categories:",
+            available_categories,
+            default=["INDICES", "COMMODITIES", "FOREX"] if available_categories else [],
+            key="sel_cats"
+        )
+        
         if selected_categories:
-            for cat in selected_categories: tickers_to_scan.update(TICKER_CATEGORIES.get(cat, {}))
-        else: st.sidebar.warning("Please select at least one category.")
+            for cat in selected_categories:
+                tickers_to_scan.update(TICKER_CATEGORIES.get(cat, {}))
+        else:
+            st.sidebar.warning("Please select at least one category.")
+    
     elif scan_option == "Specific Tickers":
         ticker_input = st.sidebar.text_area("Enter tickers (comma-separated):", key="spec_ticks")
+        
         if ticker_input:
-            specific_tickers_list = [t.strip().upper() for t in ticker_input.split(',')];
+            specific_tickers_list = [t.strip().upper() for t in ticker_input.split(',')]
             for ticker in specific_tickers_list:
-                found = False;
+                found = False
                 for cat_tickers in TICKER_CATEGORIES.values():
-                    if ticker in cat_tickers: tickers_to_scan[ticker] = cat_tickers[ticker]; found = True; break
-                if not found: tickers_to_scan[ticker] = ticker
-        else: st.sidebar.warning("Please enter at least one ticker.")
-    else: # All Categories
-        for cat_tickers in TICKER_CATEGORIES.values(): tickers_to_scan.update(cat_tickers)
+                    if ticker in cat_tickers:
+                        tickers_to_scan[ticker] = cat_tickers[ticker]
+                        found = True
+                        break
+                if not found:
+                    tickers_to_scan[ticker] = ticker
+        else:
+            st.sidebar.warning("Please enter at least one ticker.")
+    
+    else:  # All Categories - but with warnings and limits
+        st.sidebar.warning("Scanning all tickers may take a long time. Consider selecting specific categories instead.")
+        sample_categories = list(TICKER_CATEGORIES.keys())[:2]  # Just take first 2 categories for performance
+        for cat in sample_categories:
+            tickers_to_scan.update(TICKER_CATEGORIES.get(cat, {}))
+        st.sidebar.info(f"For performance, limiting to {len(tickers_to_scan)} tickers from {', '.join(sample_categories)} categories.")
+    
+    # Custom max ticker input
+    custom_max = st.sidebar.number_input("Maximum tickers to scan:", min_value=1, max_value=100, value=max_tickers)
+    max_tickers = custom_max if custom_max else max_tickers
+    
+    # Scan button
     if st.sidebar.button("▶️ Run Scan", use_container_width=True, type="primary", disabled=(len(tickers_to_scan) == 0)):
-        st.session_state.scan_results = scan_tickers(tickers_to_scan); st.session_state.selected_instrument_index = None
-    st.sidebar.markdown("---"); st.sidebar.caption(f"Strategy uses {TF_CONDITIONS} conditions / {TF_ENTRY} entries.")
+        with st.spinner(f"Scanning up to {max_tickers} tickers..."):
+            st.session_state.scan_results = scan_tickers(tickers_to_scan, max_tickers)
+            st.session_state.selected_instrument_index = None
+    
+    st.sidebar.markdown("---")
+    st.sidebar.caption(f"Strategy uses {TF_CONDITIONS} conditions / {TF_ENTRY} entries.")
+
+    # Tabs
     tab_dashboard, tab_details = st.tabs(["🔎 Scan Results", "📈 Detailed Charts"])
+    
     with tab_dashboard:
         st.header("Scan Results Dashboard")
-        if not st.session_state.scan_results: st.info("Click 'Run Scan' in the sidebar to start.")
+        
+        if not st.session_state.scan_results:
+            st.info("Click 'Run Scan' in the sidebar to start.")
         else:
-            displayable_results = [r for r in st.session_state.scan_results if r['Setup'] not in ["Error", "None", "Calc Error", "Conflicting"]]
-            if not displayable_results: st.success("Scan complete. No active Long/Short/Watch setups found.")
+            displayable_results = [r for r in st.session_state.scan_results 
+                                  if r['Setup'] not in ["Error", "None", "Calc Error", "Data Error", "Conflicting"]]
+            
+            if not displayable_results:
+                st.success("Scan complete. No active Long/Short/Watch setups found.")
             else:
                 st.success(f"Scan complete. Found {len(displayable_results)} potential setups or watchlist candidates.")
-                displayed_df = display_results_table(displayable_results) # Call the modified display function
+                
+                # Use the optimized display function
+                displayed_df = display_results_table(st.session_state.scan_results)
+                
                 if displayed_df is not None and not displayed_df.empty:
-                    st.markdown("---"); st.write("Select an instrument from the table above for detailed charts:")
-                    selected_name = st.selectbox("Instrument Name:", options=displayed_df["Name"].tolist(), index=0, key="detail_select_dashboard")
+                    st.markdown("---")
+                    st.write("Select an instrument from the table above for detailed charts:")
+                    
+                    # Use selectbox for instrument selection
+                    selected_name = st.selectbox(
+                        "Instrument Name:",
+                        options=displayed_df["Name"].tolist(),
+                        index=0,
+                        key="detail_select_dashboard"
+                    )
+                    
                     if st.button("Show Detailed Charts"):
-                        selected_row_df = displayed_df[displayed_df["Name"] == selected_name].iloc[0]
-                        original_idx = int(selected_row_df["_original_index"])
-                        if 0 <= original_idx < len(st.session_state.scan_results):
-                             st.session_state.selected_instrument_index = original_idx; st.info(f"Switch to 'Detailed Charts' tab.")
-                        else: st.error("Error linking selection.")
+                        try:
+                            selected_row_df = displayed_df[displayed_df["Name"] == selected_name].iloc[0]
+                            original_idx = int(selected_row_df["_original_index"])
+                            
+                            if 0 <= original_idx < len(st.session_state.scan_results):
+                                st.session_state.selected_instrument_index = original_idx
+                                st.info("Switch to 'Detailed Charts' tab to view analysis.")
+                            else:
+                                st.error("Error linking selection.")
+                        except Exception as e:
+                            st.error(f"Error selecting instrument: {str(e)}")
+    
     with tab_details:
         st.header("Detailed Instrument Analysis")
+        
         if st.session_state.selected_instrument_index is not None:
-             if 0 <= st.session_state.selected_instrument_index < len(st.session_state.scan_results):
-                 selected_result_data = st.session_state.scan_results[st.session_state.selected_instrument_index]
-                 if st.button("← Back / Clear Selection"): st.session_state.selected_instrument_index = None; st.experimental_rerun()
-                 else: display_detailed_charts(selected_result_data)
-             else: st.warning("Invalid index."); st.session_state.selected_instrument_index = None
-        else: st.info("Select instrument from 'Scan Results' and click 'Show Detailed Charts'.")
+            try:
+                if 0 <= st.session_state.selected_instrument_index < len(st.session_state.scan_results):
+                    selected_result_data = st.session_state.scan_results[st.session_state.selected_instrument_index]
+                    
+                    if st.button("← Back / Clear Selection"):
+                        st.session_state.selected_instrument_index = None
+                        st.rerun()
+                    else:
+                        display_detailed_charts(selected_result_data)
+                else:
+                    st.warning("Invalid selection index.")
+                    st.session_state.selected_instrument_index = None
+            except Exception as e:
+                st.error(f"Error displaying charts: {str(e)}")
+                st.session_state.selected_instrument_index = None
+        else:
+            st.info("Select an instrument from 'Scan Results' and click 'Show Detailed Charts'.")
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        st.error(f"An unexpected error occurred: {str(e)}")
