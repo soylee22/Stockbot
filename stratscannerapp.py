@@ -15,7 +15,7 @@ TF_CONDITIONS = '1wk'  # Timeframe for Market Conditions (Weekly)
 TF_ENTRY = '1d'        # Timeframe for Entry Signals (Daily)
 TF_MONTHLY = '1mo'     # Monthly timeframe for additional context
 
-# Data Periods (adjusted for RSI MA calculation)
+# Data Periods
 PERIOD_CONDITIONS = "5y"
 PERIOD_ENTRY = "1y"
 PERIOD_MONTHLY = "10y"
@@ -35,12 +35,9 @@ MACD_FAST = 12
 MACD_SLOW = 26
 MACD_SIGNAL = 9
 
-# Setup Threshold (How many ENTRY rules must be met *after* conditions are met)
-MIN_ENTRY_RULES_MET = 2  # e.g., Need at least 2 out of 3 Daily rules
-
 # --- Page Config ---
 st.set_page_config(
-    page_title="Trading Strategy Scanner",
+    page_title="Strict Strategy Scanner",
     page_icon="🎯",
     layout="wide",
 )
@@ -49,30 +46,20 @@ st.set_page_config(
 st.markdown("""
 <style>
     /* Enhanced setup styling with stronger colors */
-    .setup-ideal-long { background-color: #006400; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
     .setup-long { background-color: #28a745; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
-    .setup-caution-long { background-color: #5cb85c; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
-    .setup-ideal-short { background-color: #8b0000; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
     .setup-short { background-color: #dc3545; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
-    .setup-caution-short { background-color: #d9534f; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
-    .setup-watch { background-color: #ffc107; color: black; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
+    .setup-watch-long { background-color: #5cb85c; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
+    .setup-watch-short { background-color: #d9534f; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
+    .setup-caution { background-color: #ffc107; color: black; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
     .setup-none { background-color: #6c757d; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
-    .setup-conflict { background-color: #9932cc; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
     
     /* Cell colors for metrics */
-    .must-bullish { background-color: rgba(0, 100, 0, 0.4); }
-    .prefer-bullish { background-color: rgba(40, 167, 69, 0.4); }
-    .caution-bullish { background-color: rgba(255, 193, 7, 0.4); color: black; }
-    .must-bearish { background-color: rgba(139, 0, 0, 0.4); }
-    .prefer-bearish { background-color: rgba(220, 53, 69, 0.4); }
-    .caution-bearish { background-color: rgba(255, 193, 7, 0.4); color: black; }
+    .bullish-strong { background-color: rgba(40, 167, 69, 0.4); }
+    .bullish { background-color: rgba(40, 167, 69, 0.2); }
+    .bearish-strong { background-color: rgba(220, 53, 69, 0.4); }
+    .bearish { background-color: rgba(220, 53, 69, 0.2); }
     .neutral { background-color: rgba(108, 117, 125, 0.1); }
-    .red-flag { background-color: rgba(255, 0, 0, 0.2); }
-    
-    .stDataFrame [data-testid="stDataFrameResizable"] {
-        max-height: 800px;
-        overflow-y: auto;
-    }
+    .warning { background-color: rgba(255, 193, 7, 0.3); border: 1px solid #ffc107; }
     
     /* Table styling */
     .dataframe {
@@ -80,9 +67,8 @@ st.markdown("""
         margin: 25px 0;
         font-size: 0.9em;
         font-family: sans-serif;
-        min-width: 400px;
-        box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
         width: 100%;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
     }
     .dataframe thead tr {
         background-color: #009879;
@@ -92,6 +78,7 @@ st.markdown("""
     .dataframe th,
     .dataframe td {
         padding: 12px 15px;
+        white-space: nowrap;
     }
     .dataframe tbody tr {
         border-bottom: 1px solid #dddddd;
@@ -103,28 +90,31 @@ st.markdown("""
         border-bottom: 2px solid #009879;
     }
     
-    /* Metric explanation styles */
-    .metric-explain {
-        margin-top: 20px;
-        padding: 10px;
-        background-color: #f8f9fa;
-        border-radius: 4px;
-    }
-    .metric-row {
-        margin-bottom: 8px;
-    }
-    .metric-label {
-        font-weight: bold;
+    /* Tooltip style */
+    .tooltip {
+        position: relative;
         display: inline-block;
-        width: 120px;
+        cursor: help;
     }
-    .must-condition {
-        color: #dc3545;
-        font-weight: bold;
+    .tooltip .tooltiptext {
+        visibility: hidden;
+        width: 200px;
+        background-color: #555;
+        color: #fff;
+        text-align: center;
+        border-radius: 6px;
+        padding: 5px;
+        position: absolute;
+        z-index: 1;
+        bottom: 125%;
+        left: 50%;
+        margin-left: -100px;
+        opacity: 0;
+        transition: opacity 0.3s;
     }
-    .prefer-condition {
-        color: #fd7e14;
-        font-weight: bold;
+    .tooltip:hover .tooltiptext {
+        visibility: visible;
+        opacity: 1;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -139,8 +129,8 @@ def fetch_strategy_data(ticker):
         data_entry = ticker_obj.history(period=PERIOD_ENTRY, interval=TF_ENTRY)
         data_monthly = ticker_obj.history(period=PERIOD_MONTHLY, interval=TF_MONTHLY)
         
-        min_len_cond = max(EMA_LONG, MACD_SLOW, RSI_WINDOW + RSI_MA_PERIOD) + 5
-        min_len_entry = max(EMA_LONG, MACD_SLOW, RSI_WINDOW + RSI_MA_PERIOD) + 5
+        min_len_cond = max(EMA_LONG, MACD_SLOW, RSI_WINDOW + RSI_MA_PERIOD) + 10
+        min_len_entry = max(EMA_LONG, MACD_SLOW, RSI_WINDOW + RSI_MA_PERIOD) + 10
         
         if data_conditions.empty or len(data_conditions) < min_len_cond or \
            data_entry.empty or len(data_entry) < min_len_entry:
@@ -173,9 +163,9 @@ def calculate_strategy_indicators(data, timeframe="weekly"):
         
         # Calculate MACD
         data_copy.ta.macd(fast=MACD_FAST, slow=MACD_SLOW, signal=MACD_SIGNAL, append=True,
-                         col_names=(f"MACD_{MACD_FAST}_{MACD_SLOW}_{MACD_SIGNAL}",
-                                   f"MACDh_{MACD_FAST}_{MACD_SLOW}_{MACD_SIGNAL}",
-                                   f"MACDs_{MACD_FAST}_{MACD_SLOW}_{MACD_SIGNAL}"))
+                    col_names=(f"MACD_{MACD_FAST}_{MACD_SLOW}_{MACD_SIGNAL}",
+                               f"MACDh_{MACD_FAST}_{MACD_SLOW}_{MACD_SIGNAL}",
+                               f"MACDs_{MACD_FAST}_{MACD_SLOW}_{MACD_SIGNAL}"))
         
         # Extract latest values
         indicators = {}
@@ -189,243 +179,152 @@ def calculate_strategy_indicators(data, timeframe="weekly"):
         indicators[f'MACD_Signal'] = data_copy[f"MACDs_{MACD_FAST}_{MACD_SLOW}_{MACD_SIGNAL}"].iloc[-1]
         indicators[f'MACD_Hist'] = data_copy[f"MACDh_{MACD_FAST}_{MACD_SLOW}_{MACD_SIGNAL}"].iloc[-1]
         
-        # Calculate MACD Cross Status (using last 3 bars)
-        if len(data_copy) >= 3:
-            macd_line_recent = data_copy[f"MACD_{MACD_FAST}_{MACD_SLOW}_{MACD_SIGNAL}"].iloc[-3:].values
-            macd_signal_recent = data_copy[f"MACDs_{MACD_FAST}_{MACD_SLOW}_{MACD_SIGNAL}"].iloc[-3:].values
+        # Get more historical data for cross detection
+        if len(data_copy) >= 10:
+            recent_indices = range(max(0, len(data_copy)-10), len(data_copy))
             
-            # Check for recent Golden Cross (MACD line crosses above Signal)
-            indicators['MACD_Recent_Golden_Cross'] = False
-            for i in range(1, len(macd_line_recent)):
-                if macd_line_recent[i-1] < macd_signal_recent[i-1] and macd_line_recent[i] > macd_signal_recent[i]:
-                    indicators['MACD_Recent_Golden_Cross'] = True
+            # Get recent RSI and its MA for cross detection
+            recent_rsi = data_copy[f"RSI_{RSI_WINDOW}"].iloc[recent_indices].values
+            recent_rsi_ma = data_copy[f"RSI_{RSI_WINDOW}_MA_{RSI_MA_PERIOD}"].iloc[recent_indices].values
+            
+            # Check for RSI crossing above its MA
+            rsi_cross_above_ma = False
+            for i in range(1, len(recent_rsi)):
+                if recent_rsi[i-1] <= recent_rsi_ma[i-1] and recent_rsi[i] > recent_rsi_ma[i]:
+                    rsi_cross_above_ma = True
                     break
-                
-            # Check for recent Death Cross (MACD line crosses below Signal)
-            indicators['MACD_Recent_Death_Cross'] = False
-            for i in range(1, len(macd_line_recent)):
-                if macd_line_recent[i-1] > macd_signal_recent[i-1] and macd_line_recent[i] < macd_signal_recent[i]:
-                    indicators['MACD_Recent_Death_Cross'] = True
+            indicators['RSI_Cross_Above_MA'] = rsi_cross_above_ma
+            
+            # Check for RSI crossing below its MA
+            rsi_cross_below_ma = False
+            for i in range(1, len(recent_rsi)):
+                if recent_rsi[i-1] >= recent_rsi_ma[i-1] and recent_rsi[i] < recent_rsi_ma[i]:
+                    rsi_cross_below_ma = True
                     break
-        else:
-            indicators['MACD_Recent_Golden_Cross'] = False
-            indicators['MACD_Recent_Death_Cross'] = False
+            indicators['RSI_Cross_Below_MA'] = rsi_cross_below_ma
             
-        # Check for MACD hook (changing direction without cross)
-        if len(data_copy) >= 5:
-            macd_hist_recent = data_copy[f"MACDh_{MACD_FAST}_{MACD_SLOW}_{MACD_SIGNAL}"].iloc[-5:].values
+            # Check for RSI crossing above 50
+            rsi_cross_above_50 = False
+            for i in range(1, len(recent_rsi)):
+                if recent_rsi[i-1] <= 50 and recent_rsi[i] > 50:
+                    rsi_cross_above_50 = True
+                    break
+            indicators['RSI_Cross_Above_50'] = rsi_cross_above_50
             
-            # Bullish hook (histogram getting less negative)
-            bullish_hook = False
-            if macd_hist_recent[-1] < 0:
-                # Look for consistent increase in histogram values (getting less negative)
-                hist_changes = np.diff(macd_hist_recent[-3:])
-                bullish_hook = all(change > 0 for change in hist_changes)
+            # Check for RSI crossing below 50
+            rsi_cross_below_50 = False
+            for i in range(1, len(recent_rsi)):
+                if recent_rsi[i-1] >= 50 and recent_rsi[i] < 50:
+                    rsi_cross_below_50 = True
+                    break
+            indicators['RSI_Cross_Below_50'] = rsi_cross_below_50
+            
+            # Get recent MACD and Signal for cross detection
+            recent_macd = data_copy[f"MACD_{MACD_FAST}_{MACD_SLOW}_{MACD_SIGNAL}"].iloc[recent_indices].values
+            recent_signal = data_copy[f"MACDs_{MACD_FAST}_{MACD_SLOW}_{MACD_SIGNAL}"].iloc[recent_indices].values
+            
+            # Check for MACD Golden Cross (MACD crosses above Signal)
+            macd_golden_cross = False
+            for i in range(1, len(recent_macd)):
+                if recent_macd[i-1] <= recent_signal[i-1] and recent_macd[i] > recent_signal[i]:
+                    macd_golden_cross = True
+                    break
+            indicators['MACD_Golden_Cross'] = macd_golden_cross
+            
+            # Check for MACD Death Cross (MACD crosses below Signal)
+            macd_death_cross = False
+            for i in range(1, len(recent_macd)):
+                if recent_macd[i-1] >= recent_signal[i-1] and recent_macd[i] < recent_signal[i]:
+                    macd_death_cross = True
+                    break
+            indicators['MACD_Death_Cross'] = macd_death_cross
+            
+            # Check for MACD hook (changing direction without cross)
+            recent_hist = data_copy[f"MACDh_{MACD_FAST}_{MACD_SLOW}_{MACD_SIGNAL}"].iloc[recent_indices].values
+            
+            # Bullish hook (histogram getting less negative or more positive)
+            macd_bullish_hook = False
+            if len(recent_hist) >= 3:
+                # Check for two consecutive increases in histogram
+                if (recent_hist[-3] < recent_hist[-2] < recent_hist[-1]) and recent_hist[-1] < 0:
+                    macd_bullish_hook = True
+            indicators['MACD_Bullish_Hook'] = macd_bullish_hook
+            
+            # Bearish hook (histogram getting less positive or more negative)
+            macd_bearish_hook = False
+            if len(recent_hist) >= 3:
+                # Check for two consecutive decreases in histogram
+                if (recent_hist[-3] > recent_hist[-2] > recent_hist[-1]) and recent_hist[-1] > 0:
+                    macd_bearish_hook = True
+            indicators['MACD_Bearish_Hook'] = macd_bearish_hook
+            
+            # Check for price pullback to MA and finding support (for daily only)
+            if timeframe == "daily":
+                recent_lows = data_copy['Low'].iloc[recent_indices].values
+                recent_close = data_copy['Close'].iloc[recent_indices].values
+                recent_ema_short = data_copy[f'EMA_{EMA_SHORT}'].iloc[recent_indices].values
+                recent_ema_long = data_copy[f'EMA_{EMA_LONG}'].iloc[recent_indices].values
                 
-            indicators['MACD_Bullish_Hook'] = bullish_hook
-            
-            # Bearish hook (histogram getting less positive)
-            bearish_hook = False
-            if macd_hist_recent[-1] > 0:
-                # Look for consistent decrease in histogram values (getting less positive)
-                hist_changes = np.diff(macd_hist_recent[-3:])
-                bearish_hook = all(change < 0 for change in hist_changes)
+                # Detect pullback to support at EMAs
+                pullback_to_ema_support = False
+                for i in range(1, len(recent_indices)-1):
+                    # Low touches or breaches EMA but Close is above
+                    if ((recent_lows[i] <= recent_ema_short[i] and recent_close[i] > recent_ema_short[i]) or
+                        (recent_lows[i] <= recent_ema_long[i] and recent_close[i] > recent_ema_long[i])):
+                        if recent_close[i+1] > recent_close[i]:  # Next day closes higher (found support)
+                            pullback_to_ema_support = True
+                            break
+                indicators['Pullback_To_EMA_Support'] = pullback_to_ema_support
                 
-            indicators['MACD_Bearish_Hook'] = bearish_hook
+                # Detect rally to resistance at EMAs for shorts
+                rally_to_ema_resistance = False
+                recent_high = data_copy['High'].iloc[recent_indices].values
+                for i in range(1, len(recent_indices)-1):
+                    # High touches or breaches EMA but Close is below
+                    if ((recent_high[i] >= recent_ema_short[i] and recent_close[i] < recent_ema_short[i]) or
+                        (recent_high[i] >= recent_ema_long[i] and recent_close[i] < recent_ema_long[i])):
+                        if recent_close[i+1] < recent_close[i]:  # Next day closes lower (rejected at resistance)
+                            rally_to_ema_resistance = True
+                            break
+                indicators['Rally_To_EMA_Resistance'] = rally_to_ema_resistance
         else:
+            # Default values if not enough data points
+            indicators['RSI_Cross_Above_MA'] = False
+            indicators['RSI_Cross_Below_MA'] = False
+            indicators['RSI_Cross_Above_50'] = False
+            indicators['RSI_Cross_Below_50'] = False
+            indicators['MACD_Golden_Cross'] = False
+            indicators['MACD_Death_Cross'] = False
             indicators['MACD_Bullish_Hook'] = False
             indicators['MACD_Bearish_Hook'] = False
+            indicators['Pullback_To_EMA_Support'] = False
+            indicators['Rally_To_EMA_Resistance'] = False
         
-        # --- Derived Boolean States Based on STRICT rules ---
-        
-        # RSI States - STRICT implementation (MUST vs PREFER)
+        # --- Basic derived boolean states ---
         indicators['RSI_Value'] = round(indicators[f'RSI_{RSI_WINDOW}'], 1)
         indicators['RSI_MA_Value'] = round(indicators[f'RSI_{RSI_WINDOW}_MA'], 1)
-        
-        # Long - RSI MUST be > 50 (mandatory)
         indicators['RSI_Above_50'] = indicators[f'RSI_{RSI_WINDOW}'] > RSI_MID
-        # Long - RSI preferably above MA (preferred but not mandatory)
-        indicators['RSI_Above_MA'] = indicators[f'RSI_{RSI_WINDOW}'] > indicators[f'RSI_{RSI_WINDOW}_MA']
-        
-        # Short - RSI MUST be < 50 (mandatory)
         indicators['RSI_Below_50'] = indicators[f'RSI_{RSI_WINDOW}'] < RSI_MID
-        # Short - RSI preferably below MA (preferred but not mandatory)
+        indicators['RSI_Above_MA'] = indicators[f'RSI_{RSI_WINDOW}'] > indicators[f'RSI_{RSI_WINDOW}_MA']
         indicators['RSI_Below_MA'] = indicators[f'RSI_{RSI_WINDOW}'] < indicators[f'RSI_{RSI_WINDOW}_MA']
         
-        # RSI Status for Long
-        if indicators['RSI_Above_50'] and indicators['RSI_Above_MA']:
-            indicators['RSI_Long_Status'] = 'ideal'  # Both conditions met
-        elif indicators['RSI_Above_50'] and not indicators['RSI_Above_MA']:
-            indicators['RSI_Long_Status'] = 'caution'  # MUST met, PREFER not met - RED FLAG
-        else:
-            indicators['RSI_Long_Status'] = 'fail'  # MUST condition not met
-            
-        # RSI Status for Short
-        if indicators['RSI_Below_50'] and indicators['RSI_Below_MA']:
-            indicators['RSI_Short_Status'] = 'ideal'  # Both conditions met
-        elif indicators['RSI_Below_50'] and not indicators['RSI_Below_MA']:
-            indicators['RSI_Short_Status'] = 'caution'  # MUST met, PREFER not met - RED FLAG
-        else:
-            indicators['RSI_Short_Status'] = 'fail'  # MUST condition not met
-        
-        # MACD States - STRICT implementation
-        # MACD relative to signal line (MUST condition)
+        # MACD States
         indicators['MACD_Above_Signal'] = indicators['MACD_Line'] > indicators['MACD_Signal']
         indicators['MACD_Below_Signal'] = indicators['MACD_Line'] < indicators['MACD_Signal']
-        
-        # MACD relative to zero (PREFER condition)
         indicators['MACD_Above_Zero'] = indicators['MACD_Line'] > 0
         indicators['MACD_Below_Zero'] = indicators['MACD_Line'] < 0
         
-        # Recent crosses are also valid for MUST condition
-        indicators['MACD_Bullish'] = indicators['MACD_Above_Signal'] or indicators['MACD_Recent_Golden_Cross']
-        indicators['MACD_Bearish'] = indicators['MACD_Below_Signal'] or indicators['MACD_Recent_Death_Cross']
-        
-        # MACD Status for Long
-        if indicators['MACD_Bullish'] and indicators['MACD_Above_Zero']:
-            indicators['MACD_Long_Status'] = 'ideal'  # Both conditions met
-        elif indicators['MACD_Bullish'] and not indicators['MACD_Above_Zero']:
-            indicators['MACD_Long_Status'] = 'caution'  # MUST met, PREFER not met
-        else:
-            indicators['MACD_Long_Status'] = 'fail'  # MUST condition not met
-            
-        # MACD Status for Short
-        if indicators['MACD_Bearish'] and indicators['MACD_Below_Zero']:
-            indicators['MACD_Short_Status'] = 'ideal'  # Both conditions met
-        elif indicators['MACD_Bearish'] and not indicators['MACD_Below_Zero']:
-            indicators['MACD_Short_Status'] = 'caution'  # MUST met, PREFER not met
-        else:
-            indicators['MACD_Short_Status'] = 'fail'  # MUST condition not met
-        
-        # Price Structure - STRICT implementation
-        # Price relative to EMAs
+        # Price Structure
         indicators['Price_Above_EMA_Short'] = indicators['Close'] > indicators[f'EMA_{EMA_SHORT}']
         indicators['Price_Above_EMA_Long'] = indicators['Close'] > indicators[f'EMA_{EMA_LONG}']
         indicators['Price_Above_EMA_Context'] = indicators['Close'] > indicators[f'EMA_{EMA_CONTEXT}']
-        
         indicators['Price_Below_EMA_Short'] = indicators['Close'] < indicators[f'EMA_{EMA_SHORT}']
         indicators['Price_Below_EMA_Long'] = indicators['Close'] < indicators[f'EMA_{EMA_LONG}']
         indicators['Price_Below_EMA_Context'] = indicators['Close'] < indicators[f'EMA_{EMA_CONTEXT}']
         
-        # EMA band relationship (cloud)
+        # EMA relationships (cloud)
         indicators['EMA_Band_Bullish'] = indicators[f'EMA_{EMA_SHORT}'] > indicators[f'EMA_{EMA_LONG}']
         indicators['EMA_Band_Bearish'] = indicators[f'EMA_{EMA_SHORT}'] < indicators[f'EMA_{EMA_LONG}']
-        
-        # For Long: 
-        # MUST: Price above both 11 & 21 EMAs
-        # PREFER: Also above 50 EMA
-        indicators['Price_Above_MA_Band'] = indicators['Price_Above_EMA_Short'] and indicators['Price_Above_EMA_Long']
-        
-        # For Short:
-        # MUST: Price below both 11 & 21 EMAs
-        # PREFER: Also below 50 EMA
-        indicators['Price_Below_MA_Band'] = indicators['Price_Below_EMA_Short'] and indicators['Price_Below_EMA_Long']
-        
-        # Price Status for Long
-        if indicators['Price_Above_MA_Band'] and indicators['Price_Above_EMA_Context']:
-            indicators['Price_Long_Status'] = 'ideal'  # Both conditions met
-        elif indicators['Price_Above_MA_Band'] and not indicators['Price_Above_EMA_Context']:
-            indicators['Price_Long_Status'] = 'caution'  # MUST met, PREFER not met
-        else:
-            indicators['Price_Long_Status'] = 'fail'  # MUST condition not met
-            
-        # Price Status for Short
-        if indicators['Price_Below_MA_Band'] and indicators['Price_Below_EMA_Context']:
-            indicators['Price_Short_Status'] = 'ideal'  # Both conditions met
-        elif indicators['Price_Below_MA_Band'] and not indicators['Price_Below_EMA_Context']:
-            indicators['Price_Short_Status'] = 'caution'  # MUST met, PREFER not met
-        else:
-            indicators['Price_Short_Status'] = 'fail'  # MUST condition not met
-        
-        # Additional indicators for Daily timeframe
-        if timeframe == "daily":
-            # Check for RSI crossing above/below 50 and MA (recent)
-            if len(data_copy) >= 5:
-                rsi_values = data_copy[f'RSI_{RSI_WINDOW}'].iloc[-5:].values
-                rsi_ma_values = data_copy[f'RSI_{RSI_WINDOW}_MA_{RSI_MA_PERIOD}'].iloc[-5:].values
-                
-                # Check for RSI crossing above 50 recently
-                rsi_crossed_above_50 = False
-                for i in range(1, len(rsi_values)):
-                    if rsi_values[i-1] < 50 and rsi_values[i] > 50:
-                        rsi_crossed_above_50 = True
-                        break
-                
-                # Check for RSI crossing below 50 recently
-                rsi_crossed_below_50 = False
-                for i in range(1, len(rsi_values)):
-                    if rsi_values[i-1] > 50 and rsi_values[i] < 50:
-                        rsi_crossed_below_50 = True
-                        break
-                
-                # Check for RSI crossing above MA recently
-                rsi_crossed_above_ma = False
-                for i in range(1, len(rsi_values)):
-                    if rsi_values[i-1] < rsi_ma_values[i-1] and rsi_values[i] > rsi_ma_values[i]:
-                        rsi_crossed_above_ma = True
-                        break
-                
-                # Check for RSI crossing below MA recently
-                rsi_crossed_below_ma = False
-                for i in range(1, len(rsi_values)):
-                    if rsi_values[i-1] > rsi_ma_values[i-1] and rsi_values[i] < rsi_ma_values[i]:
-                        rsi_crossed_below_ma = True
-                        break
-                
-                indicators['RSI_Recent_Cross_Above_50'] = rsi_crossed_above_50
-                indicators['RSI_Recent_Cross_Below_50'] = rsi_crossed_below_50
-                indicators['RSI_Recent_Cross_Above_MA'] = rsi_crossed_above_ma
-                indicators['RSI_Recent_Cross_Below_MA'] = rsi_crossed_below_ma
-                
-                # Check for RSI crossing both 50 and MA
-                indicators['RSI_Bullish_Cross_Complete'] = rsi_crossed_above_50 and rsi_crossed_above_ma
-                indicators['RSI_Bearish_Cross_Complete'] = rsi_crossed_below_50 and rsi_crossed_below_ma
-            else:
-                indicators['RSI_Recent_Cross_Above_50'] = False
-                indicators['RSI_Recent_Cross_Below_50'] = False
-                indicators['RSI_Recent_Cross_Above_MA'] = False
-                indicators['RSI_Recent_Cross_Below_MA'] = False
-                indicators['RSI_Bullish_Cross_Complete'] = False
-                indicators['RSI_Bearish_Cross_Complete'] = False
-            
-            # Check for pullbacks/rejections at EMAs
-            if len(data_copy) >= 10:
-                recent_lows = data_copy['Low'].iloc[-10:].values
-                recent_highs = data_copy['High'].iloc[-10:].values
-                recent_ema_short = data_copy[f'EMA_{EMA_SHORT}'].iloc[-10:].values
-                recent_ema_long = data_copy[f'EMA_{EMA_LONG}'].iloc[-10:].values
-                
-                # For long: check if price recently pulled back to EMAs and bounced
-                pullback_to_emas = False
-                for i in range(len(recent_lows)):
-                    # Check if Low came close to either EMA
-                    near_ema_short = abs(recent_lows[i] - recent_ema_short[i]) / recent_ema_short[i] < 0.01
-                    near_ema_long = abs(recent_lows[i] - recent_ema_long[i]) / recent_ema_long[i] < 0.01
-                    
-                    # And then price moved higher (bounce)
-                    if (near_ema_short or near_ema_long) and i < len(recent_lows) - 1:
-                        if data_copy['Close'].iloc[-1] > recent_lows[i]:
-                            pullback_to_emas = True
-                            break
-                
-                # For short: check if price recently rallied to EMAs and got rejected
-                rejection_at_emas = False
-                for i in range(len(recent_highs)):
-                    # Check if High came close to either EMA
-                    near_ema_short = abs(recent_highs[i] - recent_ema_short[i]) / recent_ema_short[i] < 0.01
-                    near_ema_long = abs(recent_highs[i] - recent_ema_long[i]) / recent_ema_long[i] < 0.01
-                    
-                    # And then price moved lower (rejection)
-                    if (near_ema_short or near_ema_long) and i < len(recent_highs) - 1:
-                        if data_copy['Close'].iloc[-1] < recent_highs[i]:
-                            rejection_at_emas = True
-                            break
-                
-                indicators['Recent_Pullback_To_EMA'] = pullback_to_emas
-                indicators['Recent_Rejection_At_EMA'] = rejection_at_emas
-            else:
-                indicators['Recent_Pullback_To_EMA'] = False
-                indicators['Recent_Rejection_At_EMA'] = False
         
         return indicators, data_copy
     except Exception as e:
@@ -433,447 +332,528 @@ def calculate_strategy_indicators(data, timeframe="weekly"):
         return None, None
 
 
-def check_monthly_contradictions(monthly_indicators):
-    """Check if monthly timeframe has major contradictions to weekly signals"""
-    if not monthly_indicators:
-        return False, False, "No monthly data"
-    
-    # Check contradictions for LONG setups
-    monthly_contradicts_long = False
-    long_contradiction_reason = ""
-    
-    # Check for major RSI contradiction (deeply below 50)
-    if monthly_indicators.get('RSI_Below_50', False) and monthly_indicators.get('RSI_Value', 50) < 40:
-        monthly_contradicts_long = True
-        long_contradiction_reason = f"Monthly RSI deeply bearish ({monthly_indicators.get('RSI_Value', 0):.1f})"
-    
-    # Check for major MACD contradiction (strong bearish signal)
-    if monthly_indicators.get('MACD_Short_Status', '') == 'ideal':
-        if not monthly_contradicts_long:  # Only update if not already contradicted
-            monthly_contradicts_long = True
-            long_contradiction_reason = "Monthly MACD strongly bearish"
-    
-    # Check contradictions for SHORT setups
-    monthly_contradicts_short = False
-    short_contradiction_reason = ""
-    
-    # Check for major RSI contradiction (strongly above 50)
-    if monthly_indicators.get('RSI_Above_50', False) and monthly_indicators.get('RSI_Value', 50) > 60:
-        monthly_contradicts_short = True
-        short_contradiction_reason = f"Monthly RSI strongly bullish ({monthly_indicators.get('RSI_Value', 0):.1f})"
-    
-    # Check for major MACD contradiction (strong bullish signal)
-    if monthly_indicators.get('MACD_Long_Status', '') == 'ideal':
-        if not monthly_contradicts_short:  # Only update if not already contradicted
-            monthly_contradicts_short = True
-            short_contradiction_reason = "Monthly MACD strongly bullish"
-    
-    return monthly_contradicts_long, monthly_contradicts_short, long_contradiction_reason, short_contradiction_reason
-
-
 def check_strategy_setup(weekly_indicators, daily_indicators, monthly_indicators=None):
-    """Strictly implements trading rules with MUST vs PREFER conditions explicitly checked"""
     if not weekly_indicators or not daily_indicators: 
-        return "Error", 0, [], {}
+        return "Error", 0, [], {}, {}
     
-    # Initialize
-    long_setup_type = "None"
-    short_setup_type = "None"
-    long_score = 0
-    short_score = 0
-    long_rules_met = []
-    short_rules_met = []
-    long_red_flags = []
-    short_red_flags = []
+    setup_type = "None"
+    score = 0
+    rules_met = []
+    rule_details = {}  # Detailed rule checking results
+    metrics = {}  # For display
     
-    # Collect all metrics for display
-    all_metrics = {}
+    # --- Process metrics for display ---
     
-    # --- Process Weekly (HTF) Metrics ---
-    # Store metrics from weekly timeframe for display
-    all_metrics['W_RSI'] = {
-        'value': f"{weekly_indicators.get('RSI_Value', 0):.1f} vs MA: {weekly_indicators.get('RSI_MA_Value', 0):.1f}",
-        'signal': 'must-bullish' if weekly_indicators.get('RSI_Long_Status', '') == 'ideal' else
-                 'caution-bullish' if weekly_indicators.get('RSI_Long_Status', '') == 'caution' else
-                 'must-bearish' if weekly_indicators.get('RSI_Short_Status', '') == 'ideal' else
-                 'caution-bearish' if weekly_indicators.get('RSI_Short_Status', '') == 'caution' else 'neutral',
-        'desc': 'RSI>50 & >MA ✓' if weekly_indicators.get('RSI_Long_Status', '') == 'ideal' else
-               'RSI>50 but <MA ⚠️' if weekly_indicators.get('RSI_Long_Status', '') == 'caution' else
-               'RSI<50 & <MA ✓' if weekly_indicators.get('RSI_Short_Status', '') == 'ideal' else
-               'RSI<50 but >MA ⚠️' if weekly_indicators.get('RSI_Short_Status', '') == 'caution' else 'Neutral',
-        'long_status': weekly_indicators.get('RSI_Long_Status', 'fail'),
-        'short_status': weekly_indicators.get('RSI_Short_Status', 'fail')
+    # Weekly RSI
+    w_rsi_signal = 'neutral'
+    w_rsi_desc = 'Neutral'
+    if weekly_indicators['RSI_Above_50'] and weekly_indicators['RSI_Above_MA']:
+        w_rsi_signal = 'bullish-strong'
+        w_rsi_desc = 'RSI>50 & >MA (✓)'
+    elif weekly_indicators['RSI_Above_50'] and not weekly_indicators['RSI_Above_MA']:
+        w_rsi_signal = 'warning'
+        w_rsi_desc = 'RSI>50 but <MA (⚠️)'
+    elif weekly_indicators['RSI_Below_50'] and weekly_indicators['RSI_Below_MA']:
+        w_rsi_signal = 'bearish-strong'
+        w_rsi_desc = 'RSI<50 & <MA (✓)'
+    elif weekly_indicators['RSI_Below_50'] and not weekly_indicators['RSI_Below_MA']:
+        w_rsi_signal = 'warning'
+        w_rsi_desc = 'RSI<50 but >MA (⚠️)'
+    
+    metrics['W_RSI'] = {
+        'value': f"{weekly_indicators['RSI_Value']} vs MA: {weekly_indicators['RSI_MA_Value']}",
+        'signal': w_rsi_signal,
+        'desc': w_rsi_desc
     }
     
-    all_metrics['W_MACD'] = {
-        'value': f"{weekly_indicators.get('MACD_Line', 0):.3f} vs {weekly_indicators.get('MACD_Signal', 0):.3f}",
-        'signal': 'must-bullish' if weekly_indicators.get('MACD_Long_Status', '') == 'ideal' else
-                 'caution-bullish' if weekly_indicators.get('MACD_Long_Status', '') == 'caution' else
-                 'must-bearish' if weekly_indicators.get('MACD_Short_Status', '') == 'ideal' else
-                 'caution-bearish' if weekly_indicators.get('MACD_Short_Status', '') == 'caution' else 'neutral',
-        'desc': 'MACD>Sig & >0 ✓' if weekly_indicators.get('MACD_Long_Status', '') == 'ideal' else
-               'MACD>Sig but <0 ⚠️' if weekly_indicators.get('MACD_Long_Status', '') == 'caution' else
-               'MACD<Sig & <0 ✓' if weekly_indicators.get('MACD_Short_Status', '') == 'ideal' else
-               'MACD<Sig but >0 ⚠️' if weekly_indicators.get('MACD_Short_Status', '') == 'caution' else 'Neutral',
-        'long_status': weekly_indicators.get('MACD_Long_Status', 'fail'),
-        'short_status': weekly_indicators.get('MACD_Short_Status', 'fail')
+    # Weekly MACD
+    w_macd_signal = 'neutral'
+    w_macd_desc = 'Neutral'
+    
+    if weekly_indicators['MACD_Above_Signal']:
+        if weekly_indicators['MACD_Golden_Cross'] or weekly_indicators['MACD_Above_Zero']:
+            w_macd_signal = 'bullish-strong'
+            w_macd_desc = 'MACD>Signal & >0 or Cross (✓)'
+        else:
+            w_macd_signal = 'bullish'
+            w_macd_desc = 'MACD>Signal but <0 (✓)'
+    elif weekly_indicators['MACD_Below_Signal']:
+        if weekly_indicators['MACD_Death_Cross'] or weekly_indicators['MACD_Below_Zero']:
+            w_macd_signal = 'bearish-strong'
+            w_macd_desc = 'MACD<Signal & <0 or Cross (✓)'
+        else:
+            w_macd_signal = 'bearish'
+            w_macd_desc = 'MACD<Signal but >0 (✓)'
+    
+    metrics['W_MACD'] = {
+        'value': f"{weekly_indicators['MACD_Line']:.3f} vs {weekly_indicators['MACD_Signal']:.3f} ({'+' if weekly_indicators['MACD_Line'] > 0 else ''}{weekly_indicators['MACD_Line']:.3f})",
+        'signal': w_macd_signal,
+        'desc': w_macd_desc
     }
     
-    all_metrics['W_Price'] = {
-        'value': f"{weekly_indicators.get('Close', 0):.2f} vs EMAs",
-        'signal': 'must-bullish' if weekly_indicators.get('Price_Long_Status', '') == 'ideal' else
-                 'caution-bullish' if weekly_indicators.get('Price_Long_Status', '') == 'caution' else
-                 'must-bearish' if weekly_indicators.get('Price_Short_Status', '') == 'ideal' else
-                 'caution-bearish' if weekly_indicators.get('Price_Short_Status', '') == 'caution' else 'neutral',
-        'desc': 'P>EMAs & P>EMA50 ✓' if weekly_indicators.get('Price_Long_Status', '') == 'ideal' else
-               'P>EMAs but <EMA50 ⚠️' if weekly_indicators.get('Price_Long_Status', '') == 'caution' else
-               'P<EMAs & P<EMA50 ✓' if weekly_indicators.get('Price_Short_Status', '') == 'ideal' else
-               'P<EMAs but >EMA50 ⚠️' if weekly_indicators.get('Price_Short_Status', '') == 'caution' else 'Neutral',
-        'long_status': weekly_indicators.get('Price_Long_Status', 'fail'),
-        'short_status': weekly_indicators.get('Price_Short_Status', 'fail')
+    # Weekly Price Structure
+    w_price_signal = 'neutral'
+    w_price_desc = 'Mixed'
+    
+    if weekly_indicators['Price_Above_EMA_Short'] and weekly_indicators['Price_Above_EMA_Long']:
+        if weekly_indicators['Price_Above_EMA_Context']:
+            w_price_signal = 'bullish-strong'
+            w_price_desc = f"Price > EMA{EMA_SHORT}/{EMA_LONG}/{EMA_CONTEXT} (✓)"
+        else:
+            w_price_signal = 'bullish'
+            w_price_desc = f"Price > EMA{EMA_SHORT}/{EMA_LONG} (✓)"
+    elif weekly_indicators['Price_Below_EMA_Short'] and weekly_indicators['Price_Below_EMA_Long']:
+        if weekly_indicators['Price_Below_EMA_Context']:
+            w_price_signal = 'bearish-strong'
+            w_price_desc = f"Price < EMA{EMA_SHORT}/{EMA_LONG}/{EMA_CONTEXT} (✓)"
+        else:
+            w_price_signal = 'bearish'
+            w_price_desc = f"Price < EMA{EMA_SHORT}/{EMA_LONG} (✓)"
+    
+    metrics['W_Price'] = {
+        'value': f"{weekly_indicators['Close']:.2f} vs {weekly_indicators[f'EMA_{EMA_SHORT}']:.2f}/{weekly_indicators[f'EMA_{EMA_LONG}']:.2f}/{weekly_indicators[f'EMA_{EMA_CONTEXT}']:.2f}",
+        'signal': w_price_signal,
+        'desc': w_price_desc
     }
     
-    # --- Process Daily (LTF) Metrics ---
-    # For LTF RSI, specifically check for cross above/below 50 AND MA
-    rsi_ltf_long_status = 'fail'
-    if daily_indicators.get('RSI_Bullish_Cross_Complete', False):
-        rsi_ltf_long_status = 'ideal'  # Recently crossed above both 50 and MA
-    elif daily_indicators.get('RSI_Above_50', False) and daily_indicators.get('RSI_Above_MA', False):
-        rsi_ltf_long_status = 'caution'  # Above both but didn't just cross
+    # Daily RSI
+    d_rsi_signal = 'neutral'
+    d_rsi_desc = 'Neutral'
     
-    rsi_ltf_short_status = 'fail'
-    if daily_indicators.get('RSI_Bearish_Cross_Complete', False):
-        rsi_ltf_short_status = 'ideal'  # Recently crossed below both 50 and MA
-    elif daily_indicators.get('RSI_Below_50', False) and daily_indicators.get('RSI_Below_MA', False):
-        rsi_ltf_short_status = 'caution'  # Below both but didn't just cross
+    if daily_indicators['RSI_Above_50'] and daily_indicators['RSI_Above_MA']:
+        if daily_indicators['RSI_Cross_Above_50'] or daily_indicators['RSI_Cross_Above_MA']:
+            d_rsi_signal = 'bullish-strong'
+            d_rsi_desc = 'RSI>50 & >MA with recent cross (✓)'
+        else:
+            d_rsi_signal = 'bullish'
+            d_rsi_desc = 'RSI>50 & >MA (✓)'
+    elif daily_indicators['RSI_Below_50'] and daily_indicators['RSI_Below_MA']:
+        if daily_indicators['RSI_Cross_Below_50'] or daily_indicators['RSI_Cross_Below_MA']:
+            d_rsi_signal = 'bearish-strong'
+            d_rsi_desc = 'RSI<50 & <MA with recent cross (✓)'
+        else:
+            d_rsi_signal = 'bearish'
+            d_rsi_desc = 'RSI<50 & <MA (✓)'
+    elif daily_indicators['RSI_Above_50'] and not daily_indicators['RSI_Above_MA']:
+        d_rsi_signal = 'warning'
+        d_rsi_desc = 'RSI>50 but <MA (⚠️)'
+    elif daily_indicators['RSI_Below_50'] and not daily_indicators['RSI_Below_MA']:
+        d_rsi_signal = 'warning'
+        d_rsi_desc = 'RSI<50 but >MA (⚠️)'
     
-    all_metrics['D_RSI'] = {
-        'value': f"{daily_indicators.get('RSI_Value', 0):.1f} vs MA: {daily_indicators.get('RSI_MA_Value', 0):.1f}",
-        'signal': 'must-bullish' if rsi_ltf_long_status == 'ideal' else
-                 'caution-bullish' if rsi_ltf_long_status == 'caution' else
-                 'must-bearish' if rsi_ltf_short_status == 'ideal' else
-                 'caution-bearish' if rsi_ltf_short_status == 'caution' else 'neutral',
-        'desc': 'RSI crossed >50 & >MA ✓' if daily_indicators.get('RSI_Bullish_Cross_Complete', False) else
-               'RSI>50 & >MA ⚠️' if daily_indicators.get('RSI_Above_50', False) and daily_indicators.get('RSI_Above_MA', False) else
-               'RSI crossed <50 & <MA ✓' if daily_indicators.get('RSI_Bearish_Cross_Complete', False) else
-               'RSI<50 & <MA ⚠️' if daily_indicators.get('RSI_Below_50', False) and daily_indicators.get('RSI_Below_MA', False) else 'Neutral',
-        'long_status': rsi_ltf_long_status,
-        'short_status': rsi_ltf_short_status
+    metrics['D_RSI'] = {
+        'value': f"{daily_indicators['RSI_Value']} vs MA: {daily_indicators['RSI_MA_Value']}",
+        'signal': d_rsi_signal,
+        'desc': d_rsi_desc
     }
     
-    # For LTF MACD, check for Golden/Death Cross OR clear hook
-    macd_ltf_long_status = 'fail'
-    if daily_indicators.get('MACD_Recent_Golden_Cross', False):
-        macd_ltf_long_status = 'ideal'  # Recent Golden Cross
-    elif daily_indicators.get('MACD_Bullish_Hook', False) and daily_indicators.get('MACD_Above_Zero', False):
-        macd_ltf_long_status = 'ideal'  # Hook upwards above zero
-    elif daily_indicators.get('MACD_Bullish_Hook', False):
-        macd_ltf_long_status = 'caution'  # Hook upwards but below zero
-    elif daily_indicators.get('MACD_Above_Signal', False) and daily_indicators.get('MACD_Above_Zero', False):
-        macd_ltf_long_status = 'caution'  # Above signal and zero but not a recent cross or hook
+    # Daily MACD
+    d_macd_signal = 'neutral'
+    d_macd_desc = 'Neutral'
     
-    macd_ltf_short_status = 'fail'
-    if daily_indicators.get('MACD_Recent_Death_Cross', False):
-        macd_ltf_short_status = 'ideal'  # Recent Death Cross
-    elif daily_indicators.get('MACD_Bearish_Hook', False) and daily_indicators.get('MACD_Below_Zero', False):
-        macd_ltf_short_status = 'ideal'  # Hook downwards below zero
-    elif daily_indicators.get('MACD_Bearish_Hook', False):
-        macd_ltf_short_status = 'caution'  # Hook downwards but above zero
-    elif daily_indicators.get('MACD_Below_Signal', False) and daily_indicators.get('MACD_Below_Zero', False):
-        macd_ltf_short_status = 'caution'  # Below signal and zero but not a recent cross or hook
+    if daily_indicators['MACD_Golden_Cross']:
+        d_macd_signal = 'bullish-strong'
+        d_macd_desc = 'Recent MACD Golden Cross (✓)'
+    elif daily_indicators['MACD_Death_Cross']:
+        d_macd_signal = 'bearish-strong'
+        d_macd_desc = 'Recent MACD Death Cross (✓)'
+    elif daily_indicators['MACD_Above_Signal']:
+        if daily_indicators['MACD_Above_Zero'] or daily_indicators['MACD_Bullish_Hook']:
+            d_macd_signal = 'bullish-strong'
+            d_macd_desc = 'MACD>Signal & >0 or Hook Up (✓)'
+        else:
+            d_macd_signal = 'bullish'
+            d_macd_desc = 'MACD>Signal but <0 (✓)'
+    elif daily_indicators['MACD_Below_Signal']:
+        if daily_indicators['MACD_Below_Zero'] or daily_indicators['MACD_Bearish_Hook']:
+            d_macd_signal = 'bearish-strong'
+            d_macd_desc = 'MACD<Signal & <0 or Hook Down (✓)'
+        else:
+            d_macd_signal = 'bearish'
+            d_macd_desc = 'MACD<Signal but >0 (✓)'
     
-    all_metrics['D_MACD'] = {
-        'value': f"{daily_indicators.get('MACD_Line', 0):.3f} vs {daily_indicators.get('MACD_Signal', 0):.3f}",
-        'signal': 'must-bullish' if macd_ltf_long_status == 'ideal' else
-                 'caution-bullish' if macd_ltf_long_status == 'caution' else
-                 'must-bearish' if macd_ltf_short_status == 'ideal' else
-                 'caution-bearish' if macd_ltf_short_status == 'caution' else 'neutral',
-        'desc': 'MACD Golden Cross/Hook ✓' if macd_ltf_long_status == 'ideal' else
-               'MACD>Sig & >0 ⚠️' if macd_ltf_long_status == 'caution' else
-               'MACD Death Cross/Hook ✓' if macd_ltf_short_status == 'ideal' else
-               'MACD<Sig & <0 ⚠️' if macd_ltf_short_status == 'caution' else 'Neutral',
-        'long_status': macd_ltf_long_status,
-        'short_status': macd_ltf_short_status
+    metrics['D_MACD'] = {
+        'value': f"{daily_indicators['MACD_Line']:.3f} vs {daily_indicators['MACD_Signal']:.3f} ({'+' if daily_indicators['MACD_Line'] > 0 else ''}{daily_indicators['MACD_Line']:.3f})",
+        'signal': d_macd_signal,
+        'desc': d_macd_desc
     }
     
-    # For LTF Price Action, check for pullback to support or rejection at resistance
-    price_ltf_long_status = 'fail'
-    if daily_indicators.get('Recent_Pullback_To_EMA', False) and daily_indicators.get('Price_Above_MA_Band', False):
-        price_ltf_long_status = 'ideal'  # Pullback to MA and bounce, now above MAs
-    elif daily_indicators.get('Price_Above_MA_Band', False) and daily_indicators.get('Price_Above_EMA_Context', False):
-        price_ltf_long_status = 'caution'  # Above MAs but no recent pullback
-    elif daily_indicators.get('Price_Above_MA_Band', False):
-        price_ltf_long_status = 'caution'  # Above MA band but not above longer-term MA
+    # Daily Price Structure
+    d_price_signal = 'neutral'
+    d_price_desc = 'Mixed'
     
-    price_ltf_short_status = 'fail'
-    if daily_indicators.get('Recent_Rejection_At_EMA', False) and daily_indicators.get('Price_Below_MA_Band', False):
-        price_ltf_short_status = 'ideal'  # Rejection at MA, now below MAs
-    elif daily_indicators.get('Price_Below_MA_Band', False) and daily_indicators.get('Price_Below_EMA_Context', False):
-        price_ltf_short_status = 'caution'  # Below MAs but no recent rejection
-    elif daily_indicators.get('Price_Below_MA_Band', False):
-        price_ltf_short_status = 'caution'  # Below MA band but not below longer-term MA
+    if daily_indicators['Price_Above_EMA_Short'] and daily_indicators['Price_Above_EMA_Long']:
+        if daily_indicators['Pullback_To_EMA_Support']:
+            d_price_signal = 'bullish-strong'
+            d_price_desc = f"Price>EMAs with recent pullback support (✓✓)"
+        else:
+            d_price_signal = 'bullish'
+            d_price_desc = f"Price>EMAs (✓)"
+    elif daily_indicators['Price_Below_EMA_Short'] and daily_indicators['Price_Below_EMA_Long']:
+        if daily_indicators['Rally_To_EMA_Resistance']:
+            d_price_signal = 'bearish-strong'
+            d_price_desc = f"Price<EMAs with recent rally rejection (✓✓)"
+        else:
+            d_price_signal = 'bearish'
+            d_price_desc = f"Price<EMAs (✓)"
     
-    all_metrics['D_Price'] = {
-        'value': f"{daily_indicators.get('Close', 0):.2f} vs EMAs",
-        'signal': 'must-bullish' if price_ltf_long_status == 'ideal' else
-                 'caution-bullish' if price_ltf_long_status == 'caution' else
-                 'must-bearish' if price_ltf_short_status == 'ideal' else
-                 'caution-bearish' if price_ltf_short_status == 'caution' else 'neutral',
-        'desc': 'Pullback Support at EMAs ✓' if price_ltf_long_status == 'ideal' else
-               'Price>EMAs without pullback ⚠️' if price_ltf_long_status == 'caution' else
-               'Rejection at EMAs ✓' if price_ltf_short_status == 'ideal' else
-               'Price<EMAs without rejection ⚠️' if price_ltf_short_status == 'caution' else 'Neutral',
-        'long_status': price_ltf_long_status,
-        'short_status': price_ltf_short_status
+    metrics['D_Price'] = {
+        'value': f"{daily_indicators['Close']:.2f} vs {daily_indicators[f'EMA_{EMA_SHORT}']:.2f}/{daily_indicators[f'EMA_{EMA_LONG}']:.2f}",
+        'signal': d_price_signal,
+        'desc': d_price_desc
     }
     
-    # --- Process Monthly context ---
-    monthly_contradicts_long, monthly_contradicts_short, long_contradiction_reason, short_contradiction_reason = False, False, "", ""
+    # Monthly context
+    m_signal = 'neutral'
+    m_desc = 'N/A'
+    
     if monthly_indicators:
-        monthly_contradicts_long, monthly_contradicts_short, long_contradiction_reason, short_contradiction_reason = check_monthly_contradictions(monthly_indicators)
-        
-        all_metrics['M_Trend'] = {
-            'value': f"RSI: {monthly_indicators.get('RSI_Value', 0):.1f}, MACD: {monthly_indicators.get('MACD_Line', 0):.3f}",
-            'signal': 'red-flag' if monthly_contradicts_long or monthly_contradicts_short else 
-                     'must-bullish' if monthly_indicators.get('RSI_Above_50', False) else
-                     'must-bearish' if monthly_indicators.get('RSI_Below_50', False) else 'neutral',
-            'desc': long_contradiction_reason if monthly_contradicts_long else 
-                   short_contradiction_reason if monthly_contradicts_short else
-                   'No major contradictions',
-            'contradicts_long': monthly_contradicts_long,
-            'contradicts_short': monthly_contradicts_short
-        }
-    else:
-        all_metrics['M_Trend'] = {
-            'value': 'N/A',
-            'signal': 'neutral',
-            'desc': 'Not Available',
-            'contradicts_long': False,
-            'contradicts_short': False
-        }
+        if monthly_indicators['RSI_Above_50']:
+            if monthly_indicators['RSI_Value'] > 60:
+                m_signal = 'bullish-strong'
+                m_desc = f"Monthly RSI: {monthly_indicators['RSI_Value']} (Strong Bullish)"
+            else:
+                m_signal = 'bullish'
+                m_desc = f"Monthly RSI: {monthly_indicators['RSI_Value']} (Bullish)"
+        elif monthly_indicators['RSI_Below_50']:
+            if monthly_indicators['RSI_Value'] < 40:
+                m_signal = 'bearish-strong'
+                m_desc = f"Monthly RSI: {monthly_indicators['RSI_Value']} (Strong Bearish)"
+            else:
+                m_signal = 'bearish'
+                m_desc = f"Monthly RSI: {monthly_indicators['RSI_Value']} (Bearish)"
     
-    # --- Check LONG Setup Conditions (Group 1 - Higher Timeframe) ---
+    metrics['M_Trend'] = {
+        'value': monthly_indicators['RSI_Value'] if monthly_indicators else 'N/A',
+        'signal': m_signal,
+        'desc': m_desc
+    }
     
-    # Rule 1.1: Weekly RSI MUST be > 50 AND preferably above MA
-    weekly_rsi_long_check = weekly_indicators.get('RSI_Long_Status', 'fail')
+    # --- Check LONG Setup Conditions ---
     
-    # Rule 1.2: Weekly MACD MUST be bullish AND preferably above zero
-    weekly_macd_long_check = weekly_indicators.get('MACD_Long_Status', 'fail')
+    # Rule 1.1 - Weekly RSI Trend
+    rule_details['W_RSI_Long'] = {
+        'name': 'Weekly RSI > 50 AND preferably > MA',
+        'status': weekly_indicators['RSI_Above_50'] and weekly_indicators['RSI_Above_MA'],
+        'details': f"RSI: {weekly_indicators['RSI_Value']:.1f}, MA: {weekly_indicators['RSI_MA_Value']:.1f}",
+        'critical': True  # This rule is mandatory
+    }
     
-    # Rule 1.3: Weekly Price MUST be above MA band AND ideally above longer-term MA
-    weekly_price_long_check = weekly_indicators.get('Price_Long_Status', 'fail')
+    # Rule 1.2 - Weekly MACD Trend
+    w_macd_long_ok = (weekly_indicators['MACD_Golden_Cross'] or 
+                      (weekly_indicators['MACD_Above_Signal'] and 
+                       (weekly_indicators['MACD_Above_Zero'] or weekly_indicators['MACD_Bullish_Hook'])))
+                       
+    rule_details['W_MACD_Long'] = {
+        'name': 'Weekly MACD Golden Cross OR > Signal',
+        'status': w_macd_long_ok,
+        'details': f"MACD: {weekly_indicators['MACD_Line']:.3f}, Signal: {weekly_indicators['MACD_Signal']:.3f}",
+        'critical': True  # This rule is mandatory
+    }
     
-    # Check if ALL MUST conditions are met (at minimum level)
+    # Rule 1.3 - Weekly Price Structure
+    w_price_long_ok = weekly_indicators['Price_Above_EMA_Short'] and weekly_indicators['Price_Above_EMA_Long']
+    w_price_long_context_ok = weekly_indicators['Price_Above_EMA_Context']
+    
+    rule_details['W_Price_Long'] = {
+        'name': f"Weekly Price > EMA{EMA_SHORT}/{EMA_LONG} (ideally > EMA{EMA_CONTEXT})",
+        'status': w_price_long_ok,
+        'details': f"Price: {weekly_indicators['Close']:.2f}, EMAs: {weekly_indicators[f'EMA_{EMA_SHORT}']:.2f}/{weekly_indicators[f'EMA_{EMA_LONG}']:.2f}/{weekly_indicators[f'EMA_{EMA_CONTEXT}']:.2f}",
+        'critical': True,  # This rule is mandatory
+        'context_ok': w_price_long_context_ok  # Additional positive factor
+    }
+    
+    # Rule 1.4 - Monthly Check
+    monthly_contradicts_long = False
+    if monthly_indicators:
+        monthly_contradicts_long = monthly_indicators['RSI_Below_50'] and monthly_indicators['RSI_Value'] < 40
+    
+    rule_details['M_Check_Long'] = {
+        'name': 'Monthly RSI Check',
+        'status': not monthly_contradicts_long,
+        'details': f"Monthly RSI: {monthly_indicators['RSI_Value'] if monthly_indicators else 'N/A'}",
+        'critical': False  # Optional rule
+    }
+    
+    # Check if all HTF conditions are met for LONG
     long_htf_conditions_met = (
-        weekly_rsi_long_check != 'fail' and  # RSI > 50 (at minimum)
-        weekly_macd_long_check != 'fail' and  # MACD bullish (at minimum)
-        weekly_price_long_check != 'fail'  # Price above MA band (at minimum)
+        rule_details['W_RSI_Long']['status'] and
+        rule_details['W_MACD_Long']['status'] and
+        rule_details['W_Price_Long']['status']
     )
+    
+    # Only check LTF conditions if HTF conditions are met
+    long_ltf_rules_met = 0
+    long_ltf_total_possible = 3  # Number of LTF rules that can be met
     
     if long_htf_conditions_met:
-        # Start with base score
-        long_score = 3
+        # Rule 2.1 - LTF RSI Confirmation
+        rule_details['D_RSI_Long'] = {
+            'name': 'Daily RSI Cross > 50 AND > MA',
+            'status': daily_indicators['RSI_Above_50'] and daily_indicators['RSI_Above_MA'],
+            'strong': daily_indicators['RSI_Cross_Above_50'] or daily_indicators['RSI_Cross_Above_MA'],
+            'details': f"RSI: {daily_indicators['RSI_Value']:.1f}, MA: {daily_indicators['RSI_MA_Value']:.1f}",
+            'critical': False
+        }
         
-        # Add basic rules met
-        long_rules_met.append("W:RSI>50")
-        long_rules_met.append("W:MACD Bullish")
-        long_rules_met.append("W:Price>EMAs")
+        if rule_details['D_RSI_Long']['status']:
+            long_ltf_rules_met += 1
         
-        # Check for red flags in weekly (MUST met but PREFER not met)
-        if weekly_rsi_long_check == 'caution':
-            long_red_flags.append("W:RSI>50 but <MA ⚠️")
-        if weekly_macd_long_check == 'caution':
-            long_red_flags.append("W:MACD>Signal but <0 ⚠️")
-        if weekly_price_long_check == 'caution':
-            long_red_flags.append("W:Price>EMAs but <EMA50 ⚠️")
+        # Rule 2.2 - LTF MACD Confirmation
+        d_macd_long_ok = (daily_indicators['MACD_Golden_Cross'] or 
+                         (daily_indicators['MACD_Above_Signal'] and 
+                          (daily_indicators['MACD_Above_Zero'] or daily_indicators['MACD_Bullish_Hook'])))
+                          
+        rule_details['D_MACD_Long'] = {
+            'name': 'Daily MACD Golden Cross OR Bullish',
+            'status': d_macd_long_ok,
+            'strong': daily_indicators['MACD_Golden_Cross'] or daily_indicators['MACD_Bullish_Hook'],
+            'details': f"MACD: {daily_indicators['MACD_Line']:.3f}, Signal: {daily_indicators['MACD_Signal']:.3f}",
+            'critical': False
+        }
         
-        # Check monthly for contradictions
-        if monthly_contradicts_long:
-            long_red_flags.append(f"M:{long_contradiction_reason} ⚠️")
+        if rule_details['D_MACD_Long']['status']:
+            long_ltf_rules_met += 1
         
-        # --- Check Daily (LTF) Entry Signals for Long ---
-        ltf_entry_ideal_count = 0
-        ltf_entry_caution_count = 0
+        # Rule 2.3 - LTF Price Action
+        d_price_long_ok = daily_indicators['Price_Above_EMA_Short'] and daily_indicators['Price_Above_EMA_Long']
+        d_price_pullback_ok = daily_indicators['Pullback_To_EMA_Support']
         
-        # Rule 2.1: LTF RSI Confirmation
-        if all_metrics['D_RSI']['long_status'] == 'ideal':
-            ltf_entry_ideal_count += 1
-            long_rules_met.append("D:RSI crossed >50 & >MA")
-        elif all_metrics['D_RSI']['long_status'] == 'caution':
-            ltf_entry_caution_count += 1
-            long_rules_met.append("D:RSI>50 & >MA (no cross)")
-            long_red_flags.append("D:RSI no recent cross ⚠️")
+        rule_details['D_Price_Long'] = {
+            'name': f"Daily Price > EMA{EMA_SHORT}/{EMA_LONG} (ideally with pullback)",
+            'status': d_price_long_ok,
+            'strong': d_price_pullback_ok,
+            'details': f"Price: {daily_indicators['Close']:.2f}, EMAs: {daily_indicators[f'EMA_{EMA_SHORT}']:.2f}/{daily_indicators[f'EMA_{EMA_LONG}']:.2f}",
+            'critical': False
+        }
         
-        # Rule 2.2: LTF MACD Confirmation
-        if all_metrics['D_MACD']['long_status'] == 'ideal':
-            ltf_entry_ideal_count += 1
-            long_rules_met.append("D:MACD Golden Cross/Hook")
-        elif all_metrics['D_MACD']['long_status'] == 'caution':
-            ltf_entry_caution_count += 1
-            long_rules_met.append("D:MACD>Signal (no cross)")
-            long_red_flags.append("D:MACD no recent cross ⚠️")
+        if rule_details['D_Price_Long']['status']:
+            long_ltf_rules_met += 1
         
-        # Rule 2.3: LTF Price Action
-        if all_metrics['D_Price']['long_status'] == 'ideal':
-            ltf_entry_ideal_count += 1
-            long_rules_met.append("D:Pullback Support at EMAs")
-        elif all_metrics['D_Price']['long_status'] == 'caution':
-            ltf_entry_caution_count += 1
-            long_rules_met.append("D:Price>EMAs (no pullback)")
-            long_red_flags.append("D:No recent pullback ⚠️")
-        
-        # Score LTF signals
-        total_ltf_rules_met = ltf_entry_ideal_count + ltf_entry_caution_count
-        long_score += ltf_entry_ideal_count + (ltf_entry_caution_count * 0.5)  # Full points for ideal, half for caution
-        
-        # Determine Long Setup Quality based on:
-        # 1. HTF conditions quality (any cautions?)
-        # 2. LTF entry signals (enough met? how many ideal vs caution?)
-        # 3. Monthly contradictions
-        
-        if total_ltf_rules_met >= MIN_ENTRY_RULES_MET:
-            htf_all_ideal = (weekly_rsi_long_check == 'ideal' and 
-                            weekly_macd_long_check == 'ideal' and 
-                            weekly_price_long_check == 'ideal')
+        # Add Strong HTF rules met to the count as bonus points
+        long_htf_bonus = 0
+        if rule_details['W_Price_Long'].get('context_ok', False):
+            long_htf_bonus += 1
             
-            ltf_mostly_ideal = ltf_entry_ideal_count >= MIN_ENTRY_RULES_MET
-            
-            if htf_all_ideal and ltf_mostly_ideal and not monthly_contradicts_long:
-                long_setup_type = "Ideal Long"  # Perfect setup
-            elif monthly_contradicts_long:
-                long_setup_type = "Caution Long"  # Monthly contradiction
-            elif len(long_red_flags) > 2:
-                long_setup_type = "Caution Long"  # Too many red flags
+        # Determine Long Setup quality
+        if long_ltf_rules_met >= 2:  # Need at least 2 LTF rules for a potential setup
+            if monthly_contradicts_long:
+                setup_type = "Caution Long"
+                score = long_ltf_rules_met + 3 - 1  # Penalty for Monthly contradiction
             else:
-                long_setup_type = "Potential Long"  # Good setup with some cautions
-        else:
-            long_setup_type = "Watch Long"  # HTF conditions met but not enough LTF signals
+                setup_type = "Potential Long"
+                score = long_ltf_rules_met + 3 + long_htf_bonus
+            
+            # Compile rules met
+            rules_met.append("W:RSI>50 & >MA")
+            rules_met.append("W:MACD Bullish")
+            rules_met.append("W:Price>EMAs")
+            
+            if rule_details['W_Price_Long'].get('context_ok', False):
+                rules_met.append("W:Price>EMA50 (Bonus)")
+                
+            if rule_details['D_RSI_Long']['status']:
+                if rule_details['D_RSI_Long'].get('strong', False):
+                    rules_met.append("D:RSI Cross >50 & >MA")
+                else:
+                    rules_met.append("D:RSI>50 & >MA")
+                    
+            if rule_details['D_MACD_Long']['status']:
+                if rule_details['D_MACD_Long'].get('strong', False):
+                    rules_met.append("D:MACD Golden Cross/Hook")
+                else:
+                    rules_met.append("D:MACD Bullish")
+                    
+            if rule_details['D_Price_Long']['status']:
+                if rule_details['D_Price_Long'].get('strong', False):
+                    rules_met.append("D:Pullback Support at EMAs")
+                else:
+                    rules_met.append("D:Price>EMAs")
+                    
+            if monthly_contradicts_long:
+                rules_met.append("M:WARNING-RSI<40")
+        elif long_ltf_rules_met > 0:  # At least one LTF rule met
+            setup_type = "Watch Long"
+            score = long_ltf_rules_met + 3  # Less weight for Watch setups
+            
+            # Compile basic rules met
+            rules_met.append("W:RSI>50 & >MA")
+            rules_met.append("W:MACD Bullish")
+            rules_met.append("W:Price>EMAs")
+            
+            if rule_details['D_RSI_Long']['status']:
+                rules_met.append("D:RSI>50 & >MA")
+            if rule_details['D_MACD_Long']['status']:
+                rules_met.append("D:MACD Bullish")
+            if rule_details['D_Price_Long']['status']:
+                rules_met.append("D:Price>EMAs")
     
-    # --- Check SHORT Setup Conditions (Group 1 - Higher Timeframe) ---
+    # --- Check SHORT Setup Conditions ---
     
-    # Rule 1.1: Weekly RSI MUST be < 50 AND preferably below MA
-    weekly_rsi_short_check = weekly_indicators.get('RSI_Short_Status', 'fail')
+    # Rule 1.1 - Weekly RSI Trend (Short)
+    rule_details['W_RSI_Short'] = {
+        'name': 'Weekly RSI < 50 AND preferably < MA',
+        'status': weekly_indicators['RSI_Below_50'] and weekly_indicators['RSI_Below_MA'],
+        'details': f"RSI: {weekly_indicators['RSI_Value']:.1f}, MA: {weekly_indicators['RSI_MA_Value']:.1f}",
+        'critical': True  # This rule is mandatory
+    }
     
-    # Rule 1.2: Weekly MACD MUST be bearish AND preferably below zero
-    weekly_macd_short_check = weekly_indicators.get('MACD_Short_Status', 'fail')
+    # Rule 1.2 - Weekly MACD Trend (Short)
+    w_macd_short_ok = (weekly_indicators['MACD_Death_Cross'] or 
+                       (weekly_indicators['MACD_Below_Signal'] and 
+                        (weekly_indicators['MACD_Below_Zero'] or weekly_indicators['MACD_Bearish_Hook'])))
+                       
+    rule_details['W_MACD_Short'] = {
+        'name': 'Weekly MACD Death Cross OR < Signal',
+        'status': w_macd_short_ok,
+        'details': f"MACD: {weekly_indicators['MACD_Line']:.3f}, Signal: {weekly_indicators['MACD_Signal']:.3f}",
+        'critical': True  # This rule is mandatory
+    }
     
-    # Rule 1.3: Weekly Price MUST be below MA band AND ideally below longer-term MA
-    weekly_price_short_check = weekly_indicators.get('Price_Short_Status', 'fail')
+    # Rule 1.3 - Weekly Price Structure (Short)
+    w_price_short_ok = weekly_indicators['Price_Below_EMA_Short'] and weekly_indicators['Price_Below_EMA_Long']
+    w_price_short_context_ok = weekly_indicators['Price_Below_EMA_Context']
     
-    # Check if ALL MUST conditions are met (at minimum level)
+    rule_details['W_Price_Short'] = {
+        'name': f"Weekly Price < EMA{EMA_SHORT}/{EMA_LONG} (ideally < EMA{EMA_CONTEXT})",
+        'status': w_price_short_ok,
+        'details': f"Price: {weekly_indicators['Close']:.2f}, EMAs: {weekly_indicators[f'EMA_{EMA_SHORT}']:.2f}/{weekly_indicators[f'EMA_{EMA_LONG}']:.2f}/{weekly_indicators[f'EMA_{EMA_CONTEXT}']:.2f}",
+        'critical': True,  # This rule is mandatory
+        'context_ok': w_price_short_context_ok  # Additional positive factor
+    }
+    
+    # Rule 1.4 - Monthly Check (Short)
+    monthly_contradicts_short = False
+    if monthly_indicators:
+        monthly_contradicts_short = monthly_indicators['RSI_Above_50'] and monthly_indicators['RSI_Value'] > 60
+    
+    rule_details['M_Check_Short'] = {
+        'name': 'Monthly RSI Check',
+        'status': not monthly_contradicts_short,
+        'details': f"Monthly RSI: {monthly_indicators['RSI_Value'] if monthly_indicators else 'N/A'}",
+        'critical': False  # Optional rule
+    }
+    
+    # Check if all HTF conditions are met for SHORT
     short_htf_conditions_met = (
-        weekly_rsi_short_check != 'fail' and  # RSI < 50 (at minimum)
-        weekly_macd_short_check != 'fail' and  # MACD bearish (at minimum)
-        weekly_price_short_check != 'fail'  # Price below MA band (at minimum)
+        rule_details['W_RSI_Short']['status'] and
+        rule_details['W_MACD_Short']['status'] and
+        rule_details['W_Price_Short']['status']
     )
     
+    # Only check LTF conditions if HTF conditions are met
+    short_ltf_rules_met = 0
+    short_ltf_total_possible = 3  # Number of LTF rules that can be met
+    
     if short_htf_conditions_met:
-        # Start with base score
-        short_score = 3
+        # Rule 2.1 - LTF RSI Confirmation (Short)
+        rule_details['D_RSI_Short'] = {
+            'name': 'Daily RSI < 50 AND < MA',
+            'status': daily_indicators['RSI_Below_50'] and daily_indicators['RSI_Below_MA'],
+            'strong': daily_indicators['RSI_Cross_Below_50'] or daily_indicators['RSI_Cross_Below_MA'],
+            'details': f"RSI: {daily_indicators['RSI_Value']:.1f}, MA: {daily_indicators['RSI_MA_Value']:.1f}",
+            'critical': False
+        }
         
-        # Add basic rules met
-        short_rules_met.append("W:RSI<50")
-        short_rules_met.append("W:MACD Bearish")
-        short_rules_met.append("W:Price<EMAs")
+        if rule_details['D_RSI_Short']['status']:
+            short_ltf_rules_met += 1
         
-        # Check for red flags in weekly (MUST met but PREFER not met)
-        if weekly_rsi_short_check == 'caution':
-            short_red_flags.append("W:RSI<50 but >MA ⚠️")
-        if weekly_macd_short_check == 'caution':
-            short_red_flags.append("W:MACD<Signal but >0 ⚠️")
-        if weekly_price_short_check == 'caution':
-            short_red_flags.append("W:Price<EMAs but >EMA50 ⚠️")
+        # Rule 2.2 - LTF MACD Confirmation (Short)
+        d_macd_short_ok = (daily_indicators['MACD_Death_Cross'] or 
+                          (daily_indicators['MACD_Below_Signal'] and 
+                           (daily_indicators['MACD_Below_Zero'] or daily_indicators['MACD_Bearish_Hook'])))
+                           
+        rule_details['D_MACD_Short'] = {
+            'name': 'Daily MACD Death Cross OR Bearish',
+            'status': d_macd_short_ok,
+            'strong': daily_indicators['MACD_Death_Cross'] or daily_indicators['MACD_Bearish_Hook'],
+            'details': f"MACD: {daily_indicators['MACD_Line']:.3f}, Signal: {daily_indicators['MACD_Signal']:.3f}",
+            'critical': False
+        }
         
-        # Check monthly for contradictions
-        if monthly_contradicts_short:
-            short_red_flags.append(f"M:{short_contradiction_reason} ⚠️")
+        if rule_details['D_MACD_Short']['status']:
+            short_ltf_rules_met += 1
         
-        # --- Check Daily (LTF) Entry Signals for Short ---
-        ltf_entry_ideal_count = 0
-        ltf_entry_caution_count = 0
+        # Rule 2.3 - LTF Price Action (Short)
+        d_price_short_ok = daily_indicators['Price_Below_EMA_Short'] and daily_indicators['Price_Below_EMA_Long']
+        d_price_rally_ok = daily_indicators['Rally_To_EMA_Resistance']
         
-        # Rule 2.1: LTF RSI Confirmation
-        if all_metrics['D_RSI']['short_status'] == 'ideal':
-            ltf_entry_ideal_count += 1
-            short_rules_met.append("D:RSI crossed <50 & <MA")
-        elif all_metrics['D_RSI']['short_status'] == 'caution':
-            ltf_entry_caution_count += 1
-            short_rules_met.append("D:RSI<50 & <MA (no cross)")
-            short_red_flags.append("D:RSI no recent cross ⚠️")
+        rule_details['D_Price_Short'] = {
+            'name': f"Daily Price < EMA{EMA_SHORT}/{EMA_LONG} (ideally with rally rejection)",
+            'status': d_price_short_ok,
+            'strong': d_price_rally_ok,
+            'details': f"Price: {daily_indicators['Close']:.2f}, EMAs: {daily_indicators[f'EMA_{EMA_SHORT}']:.2f}/{daily_indicators[f'EMA_{EMA_LONG}']:.2f}",
+            'critical': False
+        }
         
-        # Rule 2.2: LTF MACD Confirmation
-        if all_metrics['D_MACD']['short_status'] == 'ideal':
-            ltf_entry_ideal_count += 1
-            short_rules_met.append("D:MACD Death Cross/Hook")
-        elif all_metrics['D_MACD']['short_status'] == 'caution':
-            ltf_entry_caution_count += 1
-            short_rules_met.append("D:MACD<Signal (no cross)")
-            short_red_flags.append("D:MACD no recent cross ⚠️")
+        if rule_details['D_Price_Short']['status']:
+            short_ltf_rules_met += 1
         
-        # Rule 2.3: LTF Price Action
-        if all_metrics['D_Price']['short_status'] == 'ideal':
-            ltf_entry_ideal_count += 1
-            short_rules_met.append("D:Rejection at EMAs")
-        elif all_metrics['D_Price']['short_status'] == 'caution':
-            ltf_entry_caution_count += 1
-            short_rules_met.append("D:Price<EMAs (no rejection)")
-            short_red_flags.append("D:No recent rejection ⚠️")
-        
-        # Score LTF signals
-        total_ltf_rules_met = ltf_entry_ideal_count + ltf_entry_caution_count
-        short_score += ltf_entry_ideal_count + (ltf_entry_caution_count * 0.5)  # Full points for ideal, half for caution
-        
-        # Determine Short Setup Quality
-        if total_ltf_rules_met >= MIN_ENTRY_RULES_MET:
-            htf_all_ideal = (weekly_rsi_short_check == 'ideal' and 
-                            weekly_macd_short_check == 'ideal' and 
-                            weekly_price_short_check == 'ideal')
+        # Add Strong HTF rules met to the count as bonus points
+        short_htf_bonus = 0
+        if rule_details['W_Price_Short'].get('context_ok', False):
+            short_htf_bonus += 1
             
-            ltf_mostly_ideal = ltf_entry_ideal_count >= MIN_ENTRY_RULES_MET
-            
-            if htf_all_ideal and ltf_mostly_ideal and not monthly_contradicts_short:
-                short_setup_type = "Ideal Short"  # Perfect setup
-            elif monthly_contradicts_short:
-                short_setup_type = "Caution Short"  # Monthly contradiction
-            elif len(short_red_flags) > 2:
-                short_setup_type = "Caution Short"  # Too many red flags
+        # Determine Short Setup quality
+        if short_ltf_rules_met >= 2:  # Need at least 2 LTF rules for a potential setup
+            if monthly_contradicts_short:
+                setup_type = "Caution Short"
+                score = -(short_ltf_rules_met + 3 - 1)  # Negative score for shorts with penalty
             else:
-                short_setup_type = "Potential Short"  # Good setup with some cautions
-        else:
-            short_setup_type = "Watch Short"  # HTF conditions met but not enough LTF signals
+                setup_type = "Potential Short"
+                score = -(short_ltf_rules_met + 3 + short_htf_bonus)  # Negative score for shorts
+            
+            # Compile rules met
+            rules_met.append("W:RSI<50 & <MA")
+            rules_met.append("W:MACD Bearish")
+            rules_met.append("W:Price<EMAs")
+            
+            if rule_details['W_Price_Short'].get('context_ok', False):
+                rules_met.append("W:Price<EMA50 (Bonus)")
+                
+            if rule_details['D_RSI_Short']['status']:
+                if rule_details['D_RSI_Short'].get('strong', False):
+                    rules_met.append("D:RSI Cross <50 & <MA")
+                else:
+                    rules_met.append("D:RSI<50 & <MA")
+                    
+            if rule_details['D_MACD_Short']['status']:
+                if rule_details['D_MACD_Short'].get('strong', False):
+                    rules_met.append("D:MACD Death Cross/Hook")
+                else:
+                    rules_met.append("D:MACD Bearish")
+                    
+            if rule_details['D_Price_Short']['status']:
+                if rule_details['D_Price_Short'].get('strong', False):
+                    rules_met.append("D:Rally Rejection at EMAs")
+                else:
+                    rules_met.append("D:Price<EMAs")
+                    
+            if monthly_contradicts_short:
+                rules_met.append("M:WARNING-RSI>60")
+        elif short_ltf_rules_met > 0:  # At least one LTF rule met
+            setup_type = "Watch Short"
+            score = -(short_ltf_rules_met + 3)  # Less weight for Watch setups
+            
+            # Compile basic rules met
+            rules_met.append("W:RSI<50 & <MA")
+            rules_met.append("W:MACD Bearish")
+            rules_met.append("W:Price<EMAs")
+            
+            if rule_details['D_RSI_Short']['status']:
+                rules_met.append("D:RSI<50 & <MA")
+            if rule_details['D_MACD_Short']['status']:
+                rules_met.append("D:MACD Bearish")
+            if rule_details['D_Price_Short']['status']:
+                rules_met.append("D:Price<EMAs")
     
-    # --- Determine Final Setup Type ---
-    final_setup = "None"
-    final_score = 0
-    final_rules = []
-    red_flags = []
+    # Handle potential conflict if both long and short HTF conditions are somehow met
+    if long_htf_conditions_met and short_htf_conditions_met:
+        setup_type = "Conflicting"
+        score = 0
+        rules_met = ["Conflicting Signals"]
     
-    # No conflict between Long and Short (one is None)
-    if long_setup_type != "None" and short_setup_type == "None":
-        final_setup = long_setup_type
-        final_score = long_score
-        final_rules = long_rules_met
-        red_flags = long_red_flags
-    elif short_setup_type != "None" and long_setup_type == "None":
-        final_setup = short_setup_type
-        final_score = -short_score  # Negative score for shorts
-        final_rules = short_rules_met
-        red_flags = short_red_flags
-    
-    # Handle conflict cases
-    elif long_setup_type != "None" and short_setup_type != "None":
-        # Both long and short setups detected - this is a conflict
-        final_setup = "Conflict"
-        final_score = 0
-        final_rules = ["Conflicting Signals"]
-        red_flags = ["Both Long and Short conditions met simultaneously"]
-    else:
-        final_setup = "None"
-        final_score = 0
-        final_rules = []
-        red_flags = []
-    
-    return final_setup, final_score, final_rules, red_flags, all_metrics
+    return setup_type, score, rules_met, metrics, rule_details
 
 
 def scan_tickers(tickers_dict, max_tickers=40):
@@ -909,9 +889,9 @@ def scan_tickers(tickers_dict, max_tickers=40):
                         "Setup": "Data Error", 
                         "Score": 0, 
                         "Rules Met": [], 
-                        "Red Flags": [],
                         "error": True,
-                        "metrics": {}
+                        "metrics": {},
+                        "rule_details": {}
                     })
                     continue
                     
@@ -928,13 +908,13 @@ def scan_tickers(tickers_dict, max_tickers=40):
                         "Setup": "Calc Error", 
                         "Score": 0, 
                         "Rules Met": [], 
-                        "Red Flags": [],
                         "error": True,
-                        "metrics": {}
+                        "metrics": {},
+                        "rule_details": {}
                     })
                     continue
                     
-                setup_type, setup_score, rules_met, red_flags, all_metrics = check_strategy_setup(
+                setup_type, setup_score, rules_met, all_metrics, rule_details = check_strategy_setup(
                     weekly_indicators, daily_indicators, monthly_indicators
                 )
                 
@@ -949,13 +929,13 @@ def scan_tickers(tickers_dict, max_tickers=40):
                     "Score": setup_score,
                     "Price": round(current_price, 2),
                     "Last Date": last_date,
-                    "Rules Met": rules_met, 
-                    "Red Flags": red_flags,
+                    "Rules Met": ", ".join(rules_met), 
                     "error": False,
-                    "metrics": all_metrics
+                    "metrics": all_metrics,
+                    "rule_details": rule_details
                 })
                 
-                # Small delay to prevent API rate limits and reduce resource usage
+                # Small delay to prevent API rate limits
                 time.sleep(0.1)
                 
             except Exception as e:
@@ -965,9 +945,9 @@ def scan_tickers(tickers_dict, max_tickers=40):
                     "Setup": "Error", 
                     "Score": 0, 
                     "Rules Met": [f"Error: {str(e)}"], 
-                    "Red Flags": [],
                     "error": True,
-                    "metrics": {}
+                    "metrics": {},
+                    "rule_details": {}
                 })
     
     except Exception as e:
@@ -980,26 +960,22 @@ def scan_tickers(tickers_dict, max_tickers=40):
 
 def format_cell(value, signal_type):
     """Format a table cell with appropriate styling based on signal type"""
-    if signal_type == 'must-bullish':
-        return f'<span class="must-bullish">{value}</span>'
-    elif signal_type == 'prefer-bullish':
-        return f'<span class="prefer-bullish">{value}</span>'
-    elif signal_type == 'caution-bullish':
-        return f'<span class="caution-bullish">{value}</span>'
-    elif signal_type == 'must-bearish':
-        return f'<span class="must-bearish">{value}</span>'
-    elif signal_type == 'prefer-bearish':
-        return f'<span class="prefer-bearish">{value}</span>'
-    elif signal_type == 'caution-bearish':
-        return f'<span class="caution-bearish">{value}</span>'
-    elif signal_type == 'red-flag':
-        return f'<span class="red-flag">{value}</span>'
+    if signal_type == 'bullish-strong':
+        return f'<span class="bullish-strong">{value}</span>'
+    elif signal_type == 'bullish':
+        return f'<span class="bullish">{value}</span>'
+    elif signal_type == 'bearish-strong':
+        return f'<span class="bearish-strong">{value}</span>'
+    elif signal_type == 'bearish':
+        return f'<span class="bearish">{value}</span>'
+    elif signal_type == 'warning':
+        return f'<span class="warning">{value}</span>'
     else:
         return f'<span class="neutral">{value}</span>'
 
 
 def display_results_table(results_list):
-    """Displays the scan results with metrics columns, highlighting MUST vs PREFER conditions"""
+    """Displays the scan results with metrics columns"""
     if not results_list:
         st.warning("No results to display.")
         return None
@@ -1021,21 +997,14 @@ def display_results_table(results_list):
         
         # Define setup class based on the setup type
         setup_class = "setup-none"
-        if "Ideal Long" in r['Setup']: setup_class = "setup-ideal-long"
-        elif "Potential Long" in r['Setup']: setup_class = "setup-long"
-        elif "Caution Long" in r['Setup']: setup_class = "setup-caution-long"
-        elif "Watch Long" in r['Setup']: setup_class = "setup-watch"
-        elif "Ideal Short" in r['Setup']: setup_class = "setup-ideal-short"
+        if "Potential Long" in r['Setup']: setup_class = "setup-long"
+        elif "Watch Long" in r['Setup']: setup_class = "setup-watch-long"
         elif "Potential Short" in r['Setup']: setup_class = "setup-short"
-        elif "Caution Short" in r['Setup']: setup_class = "setup-caution-short"
-        elif "Watch Short" in r['Setup']: setup_class = "setup-watch"
-        elif "Conflict" in r['Setup']: setup_class = "setup-conflict"
+        elif "Watch Short" in r['Setup']: setup_class = "setup-watch-short"
+        elif "Caution" in r['Setup']: setup_class = "setup-caution"
         
         # Format setup with HTML for styling
         setup_html = f'<span class="{setup_class}">{r["Setup"]}</span>'
-        
-        # Format red flags
-        red_flags_html = "<br>".join(r.get("Red Flags", []))
         
         # Get metrics from result
         metrics = r.get('metrics', {})
@@ -1048,7 +1017,6 @@ def display_results_table(results_list):
             "Last Date": r["Last Date"],
             "Setup": setup_html,
             "Score": r["Score"],
-            "Red Flags": red_flags_html,
             "W_RSI": format_cell(
                 metrics.get('W_RSI', {}).get('value', 'N/A'), 
                 metrics.get('W_RSI', {}).get('signal', 'neutral')
@@ -1088,18 +1056,33 @@ def display_results_table(results_list):
     # Create DataFrame
     df_display = pd.DataFrame(df_data)
     
-    # Default sort: High positive scores first (best Longs), then low negative scores (best Shorts)
-    df_display = df_display.sort_values(by="Score", ascending=False).reset_index(drop=True)
+    # Add filter for setup types with checkboxes for better UX
+    st.subheader("Filter Results")
+    cols = st.columns(4)
+    with cols[0]:
+        show_potential_long = st.checkbox("Potential Long", value=True)
+    with cols[1]:
+        show_watch_long = st.checkbox("Watch Long", value=True)
+    with cols[0]:
+        show_caution_long = st.checkbox("Caution Long", value=True)
+    with cols[2]:
+        show_potential_short = st.checkbox("Potential Short", value=True)
+    with cols[3]:
+        show_watch_short = st.checkbox("Watch Short", value=True)
+    with cols[2]:
+        show_caution_short = st.checkbox("Caution Short", value=True)
+    with cols[3]:
+        show_none = st.checkbox("None", value=False)
     
-    # Add filter for setup types
-    setup_filter = st.multiselect(
-        "Filter by Setup Type:",
-        ["Ideal Long", "Potential Long", "Caution Long", "Watch Long", 
-         "Ideal Short", "Potential Short", "Caution Short", "Watch Short", 
-         "None", "Conflict"],
-        default=["Ideal Long", "Potential Long", "Caution Long", "Watch Long", 
-                "Ideal Short", "Potential Short", "Caution Short", "Watch Short"]
-    )
+    # Prepare filter based on selections
+    setup_filter = []
+    if show_potential_long: setup_filter.append("Potential Long")
+    if show_watch_long: setup_filter.append("Watch Long")
+    if show_caution_long: setup_filter.append("Caution Long")
+    if show_potential_short: setup_filter.append("Potential Short")
+    if show_watch_short: setup_filter.append("Watch Short")
+    if show_caution_short: setup_filter.append("Caution Short")
+    if show_none: setup_filter.append("None")
     
     if setup_filter:
         # Extract setup type from HTML for filtering
@@ -1111,8 +1094,26 @@ def display_results_table(results_list):
     if filtered_df.empty:
         st.info("No results match the selected filter criteria.")
         return None
-        
-    # Display with rich HTML formatting
+    
+    # Sort options
+    sort_option = st.radio(
+        "Sort by:",
+        ["Score (Descending)", "Score (Ascending)", "Ticker", "Name"],
+        horizontal=True
+    )
+    
+    if sort_option == "Score (Descending)":
+        filtered_df = filtered_df.sort_values(by="Score", ascending=False)
+    elif sort_option == "Score (Ascending)":
+        filtered_df = filtered_df.sort_values(by="Score", ascending=True)
+    elif sort_option == "Ticker":
+        filtered_df = filtered_df.sort_values(by="Ticker")
+    elif sort_option == "Name":
+        filtered_df = filtered_df.sort_values(by="Name")
+    
+    filtered_df = filtered_df.reset_index(drop=True)
+    
+    # Display table with tooltips
     st.markdown('<div class="stDataFrame">', unsafe_allow_html=True)
     st.write(
         filtered_df.to_html(
@@ -1128,69 +1129,100 @@ def display_results_table(results_list):
     return filtered_df
 
 
+def display_rules_detail(ticker, name, rule_details):
+    """Display detailed rule checking results for a specific ticker"""
+    st.subheader(f"Rule Details for {name} ({ticker})")
+    
+    # Separate long and short rules
+    long_rules = {k: v for k, v in rule_details.items() if k.endswith('Long')}
+    short_rules = {k: v for k, v in rule_details.items() if k.endswith('Short')}
+    
+    # Create two columns
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("### LONG Rules")
+        for key, rule in long_rules.items():
+            if rule['status']:
+                st.markdown(f"✅ **{rule['name']}**")
+            else:
+                if rule.get('critical', False):
+                    st.markdown(f"❌ **{rule['name']}** (CRITICAL)")
+                else:
+                    st.markdown(f"❌ **{rule['name']}**")
+            st.markdown(f"   *{rule['details']}*")
+    
+    with col2:
+        st.markdown("### SHORT Rules")
+        for key, rule in short_rules.items():
+            if rule['status']:
+                st.markdown(f"✅ **{rule['name']}**")
+            else:
+                if rule.get('critical', False):
+                    st.markdown(f"❌ **{rule['name']}** (CRITICAL)")
+                else:
+                    st.markdown(f"❌ **{rule['name']}**")
+            st.markdown(f"   *{rule['details']}*")
+
+
 # --- Main App Flow ---
 def main():
-    st.title("🎯 Trading Strategy Scanner")
+    st.title("🎯 Strict Strategy Scanner")
     
-    with st.expander("📖 Understanding the Scanner Rules & Color Coding"):
+    with st.expander("📖 Strict Strategy Implementation"):
         st.markdown(f"""
-        ### How This Scanner Strictly Follows Your Trading Rules
-        
-        This scanner implements your trading rules with careful attention to the distinction between **MUST** conditions and **PREFER/IDEAL** conditions.
+        ### Strict Strategy Scanner Implementation
+
+        This scanner strictly implements your detailed trading rules, especially focusing on the critical requirement of RSI relative to its MA.
         
         #### For LONG Setups:
         
-        **Higher Timeframe MUST Conditions:**
-        - Weekly RSI <span class="must-condition">MUST</span> be > 50 (AND preferably above its MA)
-        - Weekly MACD <span class="must-condition">MUST</span> be bullish (AND preferably above zero)
-        - Weekly Price <span class="must-condition">MUST</span> be above MA band (AND ideally above longer-term MA)
+        **Higher Timeframe Conditions (Weekly):**
+        - Weekly RSI **MUST** be > 50 **AND** above its Moving Average (this is a strict rule)
+        - Weekly MACD must be in Golden Cross OR trending above signal line
+        - Weekly Price must be above key Moving Average band (EMAs {EMA_SHORT}/{EMA_LONG})
+        - Monthly RSI is checked for major contradictions
         
-        **Lower Timeframe Entry Criteria (need at least {MIN_ENTRY_RULES_MET}):**
-        - Daily RSI <span class="must-condition">MUST</span> cross decisively above 50 AND above its MA
-        - Daily MACD <span class="must-condition">MUST</span> execute a Golden Cross OR show a hook upwards 
-        - Price <span class="must-condition">MUST</span> pull back to and find support at EMAs OR break resistance
+        **Lower Timeframe Entry Criteria (Daily):**
+        - Daily RSI must cross above 50 AND above its Moving Average
+        - Daily MACD must show Golden Cross OR bullish hook
+        - Price must find support at key MAs or trade above MAs
         
         #### For SHORT Setups:
         
-        **Higher Timeframe MUST Conditions:**
-        - Weekly RSI <span class="must-condition">MUST</span> be < 50 (AND preferably below its MA)
-        - Weekly MACD <span class="must-condition">MUST</span> be bearish (AND preferably below zero)
-        - Weekly Price <span class="must-condition">MUST</span> be below MA band (AND ideally below longer-term MA)
+        **Higher Timeframe Conditions (Weekly):**
+        - Weekly RSI **MUST** be < 50 **AND** below its Moving Average (this is a strict rule)
+        - Weekly MACD must be in Death Cross OR trending below signal line
+        - Weekly Price must be below key Moving Average band (EMAs {EMA_SHORT}/{EMA_LONG})
+        - Monthly RSI is checked for major contradictions
         
-        **Lower Timeframe Entry Criteria (need at least {MIN_ENTRY_RULES_MET}):**
-        - Daily RSI <span class="must-condition">MUST</span> cross decisively below 50 AND below its MA
-        - Daily MACD <span class="must-condition">MUST</span> execute a Death Cross OR show a hook downwards
-        - Price <span class="must-condition">MUST</span> rally to and get rejected by EMAs OR break support
+        **Lower Timeframe Entry Criteria (Daily):**
+        - Daily RSI must cross below 50 AND below its Moving Average
+        - Daily MACD must show Death Cross OR bearish hook
+        - Price must be rejected at key MAs or trade below MAs
         
-        #### Color Legend for Metrics:
-        - <span class="must-bullish">Dark Green</span>: Ideal bullish condition (MUST + PREFER both met)
-        - <span class="caution-bullish">Yellow-Green</span>: Caution bullish (MUST met, PREFER not met) - RED FLAG
-        - <span class="must-bearish">Dark Red</span>: Ideal bearish condition (MUST + PREFER both met)
-        - <span class="caution-bearish">Yellow-Red</span>: Caution bearish (MUST met, PREFER not met) - RED FLAG
-        - <span class="red-flag">Red</span>: Major contradiction or warning
-        - <span class="neutral">Gray</span>: Neutral or condition not met
+        #### Color Legend:
+        - <span class="bullish-strong">Dark Green</span>: Strongly bullish signal
+        - <span class="bullish">Light Green</span>: Moderately bullish signal
+        - <span class="bearish-strong">Dark Red</span>: Strongly bearish signal
+        - <span class="bearish">Light Red</span>: Moderately bearish signal
+        - <span class="warning">Yellow</span>: Warning signal or condition not fully met
+        - <span class="neutral">Gray</span>: Neutral signal
         
         #### Setup Types:
-        - <span class="setup-ideal-long">Ideal Long</span>: Perfect long setup with all conditions met
-        - <span class="setup-long">Potential Long</span>: Good long setup with some cautions
-        - <span class="setup-caution-long">Caution Long</span>: Long setup with multiple red flags
-        - <span class="setup-watch">Watch Long</span>: HTF conditions met but LTF not confirmed
-        - <span class="setup-ideal-short">Ideal Short</span>: Perfect short setup with all conditions met
-        - <span class="setup-short">Potential Short</span>: Good short setup with some cautions
-        - <span class="setup-caution-short">Caution Short</span>: Short setup with multiple red flags
-        - <span class="setup-watch">Watch Short</span>: HTF conditions met but LTF not confirmed
-        - <span class="setup-conflict">Conflict</span>: Contradictory signals
-        
-        #### RED FLAGS:
-        Special attention is given to cases where MUST conditions are met but PREFER conditions are not. For example:
-        - RSI > 50 but below its MA (not strongly bullish)
-        - MACD > Signal but below zero (not strongly bullish)
-        - Monthly timeframe contradictions
+        - <span class="setup-long">Potential Long</span>: All mandatory HTF conditions met + ≥2 Daily rules met, strong conviction
+        - <span class="setup-watch-long">Watch Long</span>: All mandatory HTF conditions met but waiting for more Daily confirmations
+        - <span class="setup-caution">Caution Long</span>: Valid Long setup but with Monthly context warning
+        - <span class="setup-short">Potential Short</span>: All mandatory HTF conditions met + ≥2 Daily rules met, strong conviction
+        - <span class="setup-watch-short">Watch Short</span>: All mandatory HTF conditions met but waiting for more Daily confirmations
+        - <span class="setup-caution">Caution Short</span>: Valid Short setup but with Monthly context warning
         """)
         
     # Initialize session state variables
     if 'scan_results' not in st.session_state:
         st.session_state.scan_results = []
+    if 'selected_ticker' not in st.session_state:
+        st.session_state.selected_ticker = None
 
     # Sidebar controls
     st.sidebar.title("Scan Settings")
@@ -1244,26 +1276,10 @@ def main():
     if st.sidebar.button("▶️ Run Scan", use_container_width=True, type="primary", disabled=(len(tickers_to_scan) == 0)):
         with st.spinner(f"Scanning tickers (max {max_tickers})..."):
             st.session_state.scan_results = scan_tickers(tickers_to_scan, max_tickers)
+            st.session_state.selected_ticker = None
     
     st.sidebar.markdown("---")
-    st.sidebar.caption(f"Strategy uses {TF_CONDITIONS} and {TF_ENTRY} timeframes, with {TF_MONTHLY} context.")
-    
-    # Metric explanations
-    st.sidebar.markdown("#### Key Indicators Explained:")
-    st.sidebar.markdown("""
-    - **W_RSI**: Weekly RSI vs its MA
-    - **W_MACD**: Weekly MACD vs Signal & Zero
-    - **W_Price**: Weekly Price vs EMAs
-    - **D_RSI**: Daily RSI cross/position
-    - **D_MACD**: Daily MACD cross/hook
-    - **D_Price**: Daily pullback/rejection
-    - **M_Trend**: Monthly context
-    
-    **Color code**:
-    - Dark Green/Red: Ideal condition
-    - Yellow: Caution/RED FLAG
-    - Gray: Neutral/Not Met
-    """)
+    st.sidebar.caption(f"RSI Period: {RSI_WINDOW}, RSI MA: {RSI_MA_PERIOD}, EMAs: {EMA_SHORT}/{EMA_LONG}/{EMA_CONTEXT}")
 
     # Main Results Display
     st.header("Scan Results Dashboard")
@@ -1276,25 +1292,41 @@ def main():
         if not valid_results:
             st.warning("Scan complete, but no valid results were found. Try different tickers.")
         else:
-            ideal_setups = [r for r in valid_results if r['Setup'].startswith("Ideal")]
-            potential_setups = [r for r in valid_results if r['Setup'].startswith("Potential")]
-            caution_setups = [r for r in valid_results if r['Setup'].startswith("Caution")]
-            watch_setups = [r for r in valid_results if r['Setup'].startswith("Watch")]
+            active_setups = [r for r in valid_results if r['Setup'] not in ["None", "Conflicting"]]
             
-            setup_counts = {
-                "Ideal": len(ideal_setups),
-                "Potential": len(potential_setups),
-                "Caution": len(caution_setups),
-                "Watch": len(watch_setups)
-            }
-            
-            if sum(setup_counts.values()) > 0:
-                st.success(f"Scan complete. Found {sum(setup_counts.values())} setups: {setup_counts['Ideal']} Ideal, {setup_counts['Potential']} Potential, {setup_counts['Caution']} Caution, {setup_counts['Watch']} Watch")
+            if active_setups:
+                st.success(f"Scan complete. Found {len(active_setups)} potential setups out of {len(valid_results)} valid instruments.")
             else:
                 st.info(f"Scan complete. No active setups found among {len(valid_results)} valid instruments.")
             
             # Display results table with all metrics
-            display_results_table(st.session_state.scan_results)
+            filtered_df = display_results_table(st.session_state.scan_results)
+            
+            if filtered_df is not None and not filtered_df.empty:
+                # Allow user to select a ticker for detailed rule analysis
+                st.subheader("Detailed Rule Analysis")
+                ticker_options = [(row['Ticker'], row['Name']) for _, row in filtered_df.iterrows()]
+                ticker_dict = {t: n for t, n in ticker_options}
+                
+                selected_ticker = st.selectbox(
+                    "Select a ticker for detailed rule analysis:",
+                    options=list(ticker_dict.keys()),
+                    format_func=lambda x: f"{x} - {ticker_dict[x]}"
+                )
+                
+                if st.button("Show Rule Details"):
+                    st.session_state.selected_ticker = selected_ticker
+                
+                if st.session_state.selected_ticker:
+                    # Find the selected ticker in results
+                    for result in st.session_state.scan_results:
+                        if result['ticker'] == st.session_state.selected_ticker:
+                            display_rules_detail(
+                                result['ticker'], 
+                                result['name'], 
+                                result.get('rule_details', {})
+                            )
+                            break
 
 if __name__ == "__main__":
     try:
