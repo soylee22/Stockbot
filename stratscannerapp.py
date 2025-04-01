@@ -1130,6 +1130,162 @@ def display_results_table(results_list):
     return filtered_df
 
 
+def track_historical_scores(ticker, days_to_lookback=7):
+    """
+    Calculate historical setup scores for a given ticker for the specified number of days
+    Returns a DataFrame with dates and scores
+    """
+    today = datetime.now()
+    
+    # Create a list to store the historical data
+    historical_data = []
+    
+    try:
+        # Fetch ticker data only once with enough history
+        ticker_obj = yf.Ticker(ticker)
+        all_data_conditions = ticker_obj.history(period=f"{days_to_lookback+5}w", interval=TF_CONDITIONS)
+        all_data_entry = ticker_obj.history(period=f"{days_to_lookback+30}d", interval=TF_ENTRY)
+        all_data_monthly = ticker_obj.history(period=PERIOD_MONTHLY, interval=TF_MONTHLY)
+        
+        if all_data_conditions.empty or all_data_entry.empty:
+            return pd.DataFrame(columns=["Date", "Score", "Setup"])
+        
+        # Get each day in the lookback period
+        for day_offset in range(days_to_lookback):
+            date = today - timedelta(days=day_offset)
+            date_str = date.strftime('%Y-%m-%d')
+            
+            # Find the closest date in the data (if weekend, get last trading day)
+            closest_day_entry = all_data_entry.index[all_data_entry.index <= pd.Timestamp(date_str)].max()
+            
+            if pd.isna(closest_day_entry):
+                continue
+                
+            # Get data up to that date
+            data_entry = all_data_entry.loc[:closest_day_entry]
+            
+            # Get the corresponding weekly data
+            week_containing_day = pd.Timestamp(closest_day_entry).week
+            year_containing_day = pd.Timestamp(closest_day_entry).year
+            
+            # Filter weekly data to include only up to the selected day's week
+            weekly_filter = all_data_conditions.index.map(
+                lambda x: (x.year < year_containing_day) or 
+                         (x.year == year_containing_day and x.week <= week_containing_day)
+            )
+            data_conditions = all_data_conditions.loc[weekly_filter]
+            
+            # Calculate indicators
+            if len(data_conditions) < 5 or len(data_entry) < 10:
+                # Not enough data for this historical point
+                continue
+                
+            weekly_indicators, _ = calculate_strategy_indicators(data_conditions, "weekly")
+            daily_indicators, _ = calculate_strategy_indicators(data_entry, "daily")
+            monthly_indicators = None
+            if not all_data_monthly.empty:
+                # Get monthly data up to current month
+                month_containing_day = pd.Timestamp(closest_day_entry).month
+                year_containing_day = pd.Timestamp(closest_day_entry).year
+                
+                monthly_filter = all_data_monthly.index.map(
+                    lambda x: (x.year < year_containing_day) or 
+                             (x.year == year_containing_day and x.month <= month_containing_day)
+                )
+                data_monthly = all_data_monthly.loc[monthly_filter]
+                if not data_monthly.empty:
+                    monthly_indicators, _ = calculate_strategy_indicators(data_monthly, "monthly")
+            
+            if weekly_indicators is None or daily_indicators is None:
+                continue
+                
+            # Get setup for this historical date
+            setup_type, setup_score, _, _, _ = check_strategy_setup(
+                weekly_indicators, daily_indicators, monthly_indicators
+            )
+            
+            # Store in historical data
+            historical_data.append({
+                "Date": closest_day_entry.strftime('%Y-%m-%d'),
+                "Score": setup_score,
+                "Setup": setup_type
+            })
+    
+    except Exception as e:
+        st.error(f"Error calculating historical data: {str(e)}")
+        return pd.DataFrame(columns=["Date", "Score", "Setup"])
+    
+    # Convert to DataFrame
+    historical_df = pd.DataFrame(historical_data)
+    
+    return historical_df
+
+
+def display_historical_scores(ticker, name):
+    """Display historical setup scores for a ticker"""
+    st.subheader(f"Historical Setup Scores for {name} ({ticker})")
+    
+    # Lookback period options
+    lookback_options = {
+        "1 Week": 7,
+        "2 Weeks": 14, 
+        "1 Month": 30,
+        "3 Months": 90
+    }
+    
+    lookback_period = st.selectbox(
+        "Lookback Period:",
+        options=list(lookback_options.keys()),
+        index=0,
+        key=f"lookback_{ticker}"
+    )
+    
+    days_to_lookback = lookback_options[lookback_period]
+    
+    with st.spinner(f"Calculating historical scores for {ticker}..."):
+        historical_df = track_historical_scores(ticker, days_to_lookback)
+    
+    if historical_df.empty:
+        st.warning(f"No historical data available for {ticker} in the selected period.")
+        return
+    
+    # Format the data for display
+    historical_df = historical_df.sort_values(by="Date", ascending=False)
+    
+    # Create a color-coded score display
+    def get_setup_color(setup):
+        if "Potential Long" in setup or "Watch Long" in setup:
+            return "background-color: rgba(40, 167, 69, 0.3)"
+        elif "Potential Short" in setup or "Watch Short" in setup:
+            return "background-color: rgba(220, 53, 69, 0.3)"
+        elif "Caution" in setup:
+            return "background-color: rgba(255, 193, 7, 0.3)"
+        else:
+            return "background-color: rgba(108, 117, 125, 0.1)"
+    
+    # Apply the styling
+    styled_df = historical_df.style.applymap(
+        lambda x: get_setup_color(x) if isinstance(x, str) else "", 
+        subset=["Setup"]
+    )
+    
+    # Display the table
+    st.dataframe(styled_df)
+    
+    # Create a simple bar chart of score progression
+    st.subheader("Score Progression")
+    chart_df = historical_df.sort_values(by="Date")
+    
+    # Define the chart height based on data points
+    chart_height = max(300, min(500, len(chart_df) * 30))
+    
+    # Create a bar chart with score values
+    chart = st.bar_chart(
+        data=chart_df.set_index("Date")["Score"],
+        height=chart_height
+    )
+
+
 def display_rules_detail(ticker, name, rule_details):
     """Display detailed rule checking results for a specific instrument"""
     st.subheader(f"Rule Details for {name}")
@@ -1233,6 +1389,8 @@ def main():
         st.session_state.scan_results = []
     if 'selected_ticker' not in st.session_state:
         st.session_state.selected_ticker = None
+    if 'active_tab' not in st.session_state:
+        st.session_state.active_tab = "Scan Results"
 
     # Sidebar controls
     st.sidebar.title("Scan Settings")
@@ -1287,57 +1445,97 @@ def main():
         with st.spinner(f"Scanning tickers (max {max_tickers})..."):
             st.session_state.scan_results = scan_tickers(tickers_to_scan, max_tickers)
             st.session_state.selected_ticker = None
+            st.session_state.active_tab = "Scan Results"
     
     st.sidebar.markdown("---")
     st.sidebar.caption(f"Technical Parameters: RSI({RSI_WINDOW}), RSI MA({RSI_MA_PERIOD}), EMAs: {EMA_SHORT}/{EMA_LONG}/{EMA_CONTEXT}")
 
-    # Main Results Display
-    st.header("Scan Results Dashboard")
+    # Main tabs
+    tab_options = ["Scan Results", "Historical Score Tracker", "Rule Analysis"]
+    tabs = st.tabs(tab_options)
     
-    if not st.session_state.scan_results:
-        st.info("Click 'Run Scan' in the sidebar to start.")
-    else:
-        valid_results = [r for r in st.session_state.scan_results if not r.get('error', True)]
+    # Scan Results Tab
+    with tabs[0]:
+        st.header("Scan Results Dashboard")
         
-        if not valid_results:
-            st.warning("Scan complete, but no valid results were found. Try different tickers.")
+        if not st.session_state.scan_results:
+            st.info("Click 'Run Scan' in the sidebar to start.")
         else:
-            active_setups = [r for r in valid_results if r['Setup'] not in ["None", "Conflicting"]]
+            valid_results = [r for r in st.session_state.scan_results if not r.get('error', True)]
             
-            if active_setups:
-                st.success(f"Scan complete. Found {len(active_setups)} potential setups out of {len(valid_results)} valid instruments.")
+            if not valid_results:
+                st.warning("Scan complete, but no valid results were found. Try different tickers.")
             else:
-                st.info(f"Scan complete. No active setups found among {len(valid_results)} valid instruments.")
-            
-            # Display results table with all metrics
-            filtered_df = display_results_table(st.session_state.scan_results)
-            
-            if filtered_df is not None and not filtered_df.empty:
-                # Allow user to select an instrument for detailed rule analysis
-                st.subheader("Detailed Rule Analysis")
-                # Use hidden _ticker column for selection but display names to user
-                instrument_options = [(row['_ticker'], row['Name']) for _, row in filtered_df.iterrows()]
-                instrument_dict = {t: n for t, n in instrument_options}
+                active_setups = [r for r in valid_results if r['Setup'] not in ["None", "Conflicting"]]
                 
-                selected_ticker = st.selectbox(
-                    "Select an instrument for detailed rule analysis:",
-                    options=list(instrument_dict.keys()),
-                    format_func=lambda x: f"{instrument_dict[x]}"
+                if active_setups:
+                    st.success(f"Scan complete. Found {len(active_setups)} potential setups out of {len(valid_results)} valid instruments.")
+                else:
+                    st.info(f"Scan complete. No active setups found among {len(valid_results)} valid instruments.")
+                
+                # Display results table with all metrics
+                filtered_df = display_results_table(st.session_state.scan_results)
+                
+                if filtered_df is not None and not filtered_df.empty:
+                    # Save filtered tickers for other tabs to use
+                    st.session_state.filtered_tickers = {
+                        row['_ticker']: row['Name'] for _, row in filtered_df.iterrows()
+                    }
+    
+    # Historical Score Tracker Tab
+    with tabs[1]:
+        st.header("Historical Setup Score Tracker")
+        
+        if not st.session_state.scan_results or not hasattr(st.session_state, 'filtered_tickers'):
+            st.info("First run a scan to view historical scores.")
+        else:
+            if not st.session_state.filtered_tickers:
+                st.warning("No valid tickers available. Try scanning different tickers.")
+            else:
+                # Select a ticker for historical analysis
+                hist_ticker = st.selectbox(
+                    "Select a ticker to view historical scores:",
+                    options=list(st.session_state.filtered_tickers.keys()),
+                    format_func=lambda x: f"{st.session_state.filtered_tickers[x]} ({x})",
+                    key="hist_ticker_select"
                 )
                 
-                if st.button("Show Rule Details"):
-                    st.session_state.selected_ticker = selected_ticker
+                if hist_ticker:
+                    # Display historical data
+                    display_historical_scores(
+                        hist_ticker, 
+                        st.session_state.filtered_tickers[hist_ticker]
+                    )
+    
+    # Rule Analysis Tab
+    with tabs[2]:
+        st.header("Detailed Rule Analysis")
+        
+        if not st.session_state.scan_results or not hasattr(st.session_state, 'filtered_tickers'):
+            st.info("First run a scan to view rule analysis.")
+        else:
+            if not st.session_state.filtered_tickers:
+                st.warning("No valid tickers available. Try scanning different tickers.")
+            else:
+                # Select a ticker for rule analysis
+                rule_ticker = st.selectbox(
+                    "Select an instrument for detailed rule analysis:",
+                    options=list(st.session_state.filtered_tickers.keys()),
+                    format_func=lambda x: f"{st.session_state.filtered_tickers[x]} ({x})",
+                    key="rule_ticker_select"
+                )
                 
-                if st.session_state.selected_ticker:
+                if rule_ticker:
                     # Find the selected ticker in results
                     for result in st.session_state.scan_results:
-                        if result['ticker'] == st.session_state.selected_ticker:
+                        if result['ticker'] == rule_ticker:
                             display_rules_detail(
                                 result['ticker'], 
                                 result['name'], 
                                 result.get('rule_details', {})
                             )
                             break
+
 
 if __name__ == "__main__":
     try:
