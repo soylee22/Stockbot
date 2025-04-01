@@ -1009,43 +1009,55 @@ def display_results_table(results_list):
         # Get metrics from result
         metrics = r.get('metrics', {})
         
-        # Create a row with all metrics - without Ticker, with friendly column names
+        # Create a row with all metrics - with ticker included for CSV export
         row_data = {
             "Name": r["name"],
+            "Ticker": r["ticker"],  # Include actual ticker for CSV export
             "_ticker": r["ticker"],  # Hidden column for filtering/selection
             "Price": r["Price"],
             "Last Update": r["Last Date"],
             "Setup": setup_html,
+            "Setup_plain": r["Setup"],  # Plain text version for CSV export
             "Score": r["Score"],
-            "Weekly RSI": format_cell(
-                metrics.get('W_RSI', {}).get('value', 'N/A'), 
-                metrics.get('W_RSI', {}).get('signal', 'neutral')
-            ),
-            "Weekly MACD": format_cell(
-                metrics.get('W_MACD', {}).get('value', 'N/A'), 
-                metrics.get('W_MACD', {}).get('signal', 'neutral')
-            ),
-            "Weekly Price": format_cell(
-                metrics.get('W_Price', {}).get('value', 'N/A'), 
-                metrics.get('W_Price', {}).get('signal', 'neutral')
-            ),
-            "Daily RSI": format_cell(
-                metrics.get('D_RSI', {}).get('value', 'N/A'), 
-                metrics.get('D_RSI', {}).get('signal', 'neutral')
-            ),
-            "Daily MACD": format_cell(
-                metrics.get('D_MACD', {}).get('value', 'N/A'), 
-                metrics.get('D_MACD', {}).get('signal', 'neutral')
-            ),
-            "Daily Price": format_cell(
-                metrics.get('D_Price', {}).get('value', 'N/A'), 
-                metrics.get('D_Price', {}).get('signal', 'neutral')
-            ),
-            "Monthly Trend": format_cell(
-                metrics.get('M_Trend', {}).get('value', 'N/A'), 
-                metrics.get('M_Trend', {}).get('signal', 'neutral')
-            ),
+            "Weekly RSI": metrics.get('W_RSI', {}).get('value', 'N/A'),
+            "Weekly MACD": metrics.get('W_MACD', {}).get('value', 'N/A'),
+            "Weekly Price": metrics.get('W_Price', {}).get('value', 'N/A'),
+            "Daily RSI": metrics.get('D_RSI', {}).get('value', 'N/A'),
+            "Daily MACD": metrics.get('D_MACD', {}).get('value', 'N/A'),
+            "Daily Price": metrics.get('D_Price', {}).get('value', 'N/A'),
+            "Monthly Trend": metrics.get('M_Trend', {}).get('value', 'N/A'),
+            "Rules Met": r["Rules Met"],
         }
+        
+        # Add HTML formatted versions for display
+        row_data["Weekly RSI_html"] = format_cell(
+            metrics.get('W_RSI', {}).get('value', 'N/A'), 
+            metrics.get('W_RSI', {}).get('signal', 'neutral')
+        )
+        row_data["Weekly MACD_html"] = format_cell(
+            metrics.get('W_MACD', {}).get('value', 'N/A'), 
+            metrics.get('W_MACD', {}).get('signal', 'neutral')
+        )
+        row_data["Weekly Price_html"] = format_cell(
+            metrics.get('W_Price', {}).get('value', 'N/A'), 
+            metrics.get('W_Price', {}).get('signal', 'neutral')
+        )
+        row_data["Daily RSI_html"] = format_cell(
+            metrics.get('D_RSI', {}).get('value', 'N/A'), 
+            metrics.get('D_RSI', {}).get('signal', 'neutral')
+        )
+        row_data["Daily MACD_html"] = format_cell(
+            metrics.get('D_MACD', {}).get('value', 'N/A'), 
+            metrics.get('D_MACD', {}).get('signal', 'neutral')
+        )
+        row_data["Daily Price_html"] = format_cell(
+            metrics.get('D_Price', {}).get('value', 'N/A'), 
+            metrics.get('D_Price', {}).get('signal', 'neutral')
+        )
+        row_data["Monthly Trend_html"] = format_cell(
+            metrics.get('M_Trend', {}).get('value', 'N/A'), 
+            metrics.get('M_Trend', {}).get('signal', 'neutral')
+        )
         
         df_data.append(row_data)
 
@@ -1095,7 +1107,7 @@ def display_results_table(results_list):
         st.info("No results match the selected filter criteria.")
         return None
     
-    # Sort options (removed ticker option)
+    # Sort options 
     sort_option = st.radio(
         "Sort by:",
         ["Score (Descending)", "Score (Ascending)", "Name"],
@@ -1111,8 +1123,38 @@ def display_results_table(results_list):
     
     filtered_df = filtered_df.reset_index(drop=True)
     
-    # Drop hidden ticker column before display
-    display_df = filtered_df.drop(columns=['_ticker'])
+    # Add download button for CSV export
+    current_date = datetime.now().strftime('%Y-%m-%d')
+    csv_filename = f"strategy_scanner_results_{current_date}.csv"
+    
+    # Create a CSV export version of the dataframe (without HTML formatting)
+    export_columns = [
+        "Name", "Ticker", "Price", "Last Update", "Setup_plain", "Score", 
+        "Weekly RSI", "Weekly MACD", "Weekly Price", 
+        "Daily RSI", "Daily MACD", "Daily Price", "Monthly Trend",
+        "Rules Met"
+    ]
+    export_df = filtered_df[export_columns].copy()
+    export_df.rename(columns={"Setup_plain": "Setup"}, inplace=True)
+    
+    # Add download button
+    st.download_button(
+        label="📥 Download Results as CSV",
+        data=export_df.to_csv(index=False),
+        file_name=csv_filename,
+        mime="text/csv",
+    )
+    
+    # Create display dataframe with HTML formatted columns
+    display_columns = [
+        "Name", "Price", "Last Update", "Setup", "Score", 
+        "Weekly RSI_html", "Weekly MACD_html", "Weekly Price_html", 
+        "Daily RSI_html", "Daily MACD_html", "Daily Price_html", "Monthly Trend_html"
+    ]
+    
+    # Rename HTML columns for display
+    display_df = filtered_df[display_columns].copy()
+    display_df.columns = [col.replace('_html', '') for col in display_columns]
     
     # Display table with tooltips
     st.markdown('<div class="stDataFrame">', unsafe_allow_html=True)
@@ -1128,162 +1170,6 @@ def display_results_table(results_list):
     st.markdown('</div>', unsafe_allow_html=True)
 
     return filtered_df
-
-
-def track_historical_scores(ticker, days_to_lookback=7):
-    """
-    Calculate historical setup scores for a given ticker for the specified number of days
-    Returns a DataFrame with dates and scores
-    """
-    today = datetime.now()
-    
-    # Create a list to store the historical data
-    historical_data = []
-    
-    try:
-        # Fetch ticker data only once with enough history
-        ticker_obj = yf.Ticker(ticker)
-        all_data_conditions = ticker_obj.history(period=f"{days_to_lookback+5}w", interval=TF_CONDITIONS)
-        all_data_entry = ticker_obj.history(period=f"{days_to_lookback+30}d", interval=TF_ENTRY)
-        all_data_monthly = ticker_obj.history(period=PERIOD_MONTHLY, interval=TF_MONTHLY)
-        
-        if all_data_conditions.empty or all_data_entry.empty:
-            return pd.DataFrame(columns=["Date", "Score", "Setup"])
-        
-        # Get each day in the lookback period
-        for day_offset in range(days_to_lookback):
-            date = today - timedelta(days=day_offset)
-            date_str = date.strftime('%Y-%m-%d')
-            
-            # Find the closest date in the data (if weekend, get last trading day)
-            closest_day_entry = all_data_entry.index[all_data_entry.index <= pd.Timestamp(date_str)].max()
-            
-            if pd.isna(closest_day_entry):
-                continue
-                
-            # Get data up to that date
-            data_entry = all_data_entry.loc[:closest_day_entry]
-            
-            # Get the corresponding weekly data
-            week_containing_day = pd.Timestamp(closest_day_entry).week
-            year_containing_day = pd.Timestamp(closest_day_entry).year
-            
-            # Filter weekly data to include only up to the selected day's week
-            weekly_filter = all_data_conditions.index.map(
-                lambda x: (x.year < year_containing_day) or 
-                         (x.year == year_containing_day and x.week <= week_containing_day)
-            )
-            data_conditions = all_data_conditions.loc[weekly_filter]
-            
-            # Calculate indicators
-            if len(data_conditions) < 5 or len(data_entry) < 10:
-                # Not enough data for this historical point
-                continue
-                
-            weekly_indicators, _ = calculate_strategy_indicators(data_conditions, "weekly")
-            daily_indicators, _ = calculate_strategy_indicators(data_entry, "daily")
-            monthly_indicators = None
-            if not all_data_monthly.empty:
-                # Get monthly data up to current month
-                month_containing_day = pd.Timestamp(closest_day_entry).month
-                year_containing_day = pd.Timestamp(closest_day_entry).year
-                
-                monthly_filter = all_data_monthly.index.map(
-                    lambda x: (x.year < year_containing_day) or 
-                             (x.year == year_containing_day and x.month <= month_containing_day)
-                )
-                data_monthly = all_data_monthly.loc[monthly_filter]
-                if not data_monthly.empty:
-                    monthly_indicators, _ = calculate_strategy_indicators(data_monthly, "monthly")
-            
-            if weekly_indicators is None or daily_indicators is None:
-                continue
-                
-            # Get setup for this historical date
-            setup_type, setup_score, _, _, _ = check_strategy_setup(
-                weekly_indicators, daily_indicators, monthly_indicators
-            )
-            
-            # Store in historical data
-            historical_data.append({
-                "Date": closest_day_entry.strftime('%Y-%m-%d'),
-                "Score": setup_score,
-                "Setup": setup_type
-            })
-    
-    except Exception as e:
-        st.error(f"Error calculating historical data: {str(e)}")
-        return pd.DataFrame(columns=["Date", "Score", "Setup"])
-    
-    # Convert to DataFrame
-    historical_df = pd.DataFrame(historical_data)
-    
-    return historical_df
-
-
-def display_historical_scores(ticker, name):
-    """Display historical setup scores for a ticker"""
-    st.subheader(f"Historical Setup Scores for {name} ({ticker})")
-    
-    # Lookback period options
-    lookback_options = {
-        "1 Week": 7,
-        "2 Weeks": 14, 
-        "1 Month": 30,
-        "3 Months": 90
-    }
-    
-    lookback_period = st.selectbox(
-        "Lookback Period:",
-        options=list(lookback_options.keys()),
-        index=0,
-        key=f"lookback_{ticker}"
-    )
-    
-    days_to_lookback = lookback_options[lookback_period]
-    
-    with st.spinner(f"Calculating historical scores for {ticker}..."):
-        historical_df = track_historical_scores(ticker, days_to_lookback)
-    
-    if historical_df.empty:
-        st.warning(f"No historical data available for {ticker} in the selected period.")
-        return
-    
-    # Format the data for display
-    historical_df = historical_df.sort_values(by="Date", ascending=False)
-    
-    # Create a color-coded score display
-    def get_setup_color(setup):
-        if "Potential Long" in setup or "Watch Long" in setup:
-            return "background-color: rgba(40, 167, 69, 0.3)"
-        elif "Potential Short" in setup or "Watch Short" in setup:
-            return "background-color: rgba(220, 53, 69, 0.3)"
-        elif "Caution" in setup:
-            return "background-color: rgba(255, 193, 7, 0.3)"
-        else:
-            return "background-color: rgba(108, 117, 125, 0.1)"
-    
-    # Apply the styling
-    styled_df = historical_df.style.applymap(
-        lambda x: get_setup_color(x) if isinstance(x, str) else "", 
-        subset=["Setup"]
-    )
-    
-    # Display the table
-    st.dataframe(styled_df)
-    
-    # Create a simple bar chart of score progression
-    st.subheader("Score Progression")
-    chart_df = historical_df.sort_values(by="Date")
-    
-    # Define the chart height based on data points
-    chart_height = max(300, min(500, len(chart_df) * 30))
-    
-    # Create a bar chart with score values
-    chart = st.bar_chart(
-        data=chart_df.set_index("Date")["Score"],
-        height=chart_height
-    )
 
 
 def display_rules_detail(ticker, name, rule_details):
@@ -1389,8 +1275,6 @@ def main():
         st.session_state.scan_results = []
     if 'selected_ticker' not in st.session_state:
         st.session_state.selected_ticker = None
-    if 'active_tab' not in st.session_state:
-        st.session_state.active_tab = "Scan Results"
 
     # Sidebar controls
     st.sidebar.title("Scan Settings")
@@ -1445,13 +1329,12 @@ def main():
         with st.spinner(f"Scanning tickers (max {max_tickers})..."):
             st.session_state.scan_results = scan_tickers(tickers_to_scan, max_tickers)
             st.session_state.selected_ticker = None
-            st.session_state.active_tab = "Scan Results"
     
     st.sidebar.markdown("---")
     st.sidebar.caption(f"Technical Parameters: RSI({RSI_WINDOW}), RSI MA({RSI_MA_PERIOD}), EMAs: {EMA_SHORT}/{EMA_LONG}/{EMA_CONTEXT}")
 
     # Main tabs
-    tab_options = ["Scan Results", "Historical Score Tracker", "Rule Analysis"]
+    tab_options = ["Scan Results", "Rule Analysis"]
     tabs = st.tabs(tab_options)
     
     # Scan Results Tab
@@ -1482,33 +1365,8 @@ def main():
                         row['_ticker']: row['Name'] for _, row in filtered_df.iterrows()
                     }
     
-    # Historical Score Tracker Tab
-    with tabs[1]:
-        st.header("Historical Setup Score Tracker")
-        
-        if not st.session_state.scan_results or not hasattr(st.session_state, 'filtered_tickers'):
-            st.info("First run a scan to view historical scores.")
-        else:
-            if not st.session_state.filtered_tickers:
-                st.warning("No valid tickers available. Try scanning different tickers.")
-            else:
-                # Select a ticker for historical analysis
-                hist_ticker = st.selectbox(
-                    "Select a ticker to view historical scores:",
-                    options=list(st.session_state.filtered_tickers.keys()),
-                    format_func=lambda x: f"{st.session_state.filtered_tickers[x]} ({x})",
-                    key="hist_ticker_select"
-                )
-                
-                if hist_ticker:
-                    # Display historical data
-                    display_historical_scores(
-                        hist_ticker, 
-                        st.session_state.filtered_tickers[hist_ticker]
-                    )
-    
     # Rule Analysis Tab
-    with tabs[2]:
+    with tabs[1]:
         st.header("Detailed Rule Analysis")
         
         if not st.session_state.scan_results or not hasattr(st.session_state, 'filtered_tickers'):
